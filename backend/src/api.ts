@@ -39,7 +39,7 @@ export function sendJson(response: ServerResponse, status: number, payload: unkn
   response.end(JSON.stringify(payload));
 }
 
-function readBody(request: IncomingMessage): Promise<Record<string, any>> {
+export function readBody(request: IncomingMessage): Promise<Record<string, any>> {
   return new Promise((resolve, reject) => {
     let body = "";
     let byteLength = 0;
@@ -356,4 +356,3 @@ export async function handleApi(request: IncomingMessage, response: ServerRespon
   }
   sendJson(response, 404, { error: "API route not found" });
 }
-

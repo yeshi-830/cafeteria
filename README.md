@@ -37,7 +37,19 @@ The production app is served from <http://127.0.0.1:3000>.
 
 SQLite uses `cafeteria.db` in the project root by default. Existing data is preserved. Sample menu, inventory, and order rows are only seeded when their respective tables are empty. Set `CAFETERIA_DB_PATH` to use another SQLite file, `PORT` to change the API port, or `HOST` to change the bind address.
 
-The server binds to loopback by default and has no authentication. Keep it on the local machine. Remote or multi-user use requires authentication, authorization, and HTTPS before binding to a network interface.
+The server binds to loopback by default. On the first run, configure the initial administrator account in the same shell before starting the server:
+
+```powershell
+$env:CAFETERIA_ADMIN_USERNAME = "cafe-admin"
+$env:CAFETERIA_ADMIN_PASSWORD = "use-a-unique-password-of-at-least-12-characters"
+npm run dev
+```
+
+The initial credentials are required only when the database has no users. Passwords are stored as salted scrypt hashes. Sign-in issues an eight-hour, database-backed session in an HTTP-only, SameSite=Strict cookie. Failed sign-ins are rate limited. Admins can create accounts and assign roles; managers can create staff accounts. Staff can process orders, while menu and inventory changes require a manager or admin.
+
+The first authenticated startup applies an additive, transactional schema migration for users and sessions. Existing menu, inventory, order, and activity records are not altered. Back up `cafeteria.db` before deployments as a general operational precaution.
+
+Keep the server on loopback unless remote access is intentionally configured. Network binding requires `COOKIE_SECURE=true` and an explicit comma-separated `TRUSTED_ORIGINS` allowlist, for example `https://cafe.example.com`. Terminate HTTPS at a trusted reverse proxy; the built-in server does not provide TLS. Do not expose the app publicly until the reverse proxy, firewall, backups, and credential handling are configured.
 
 ## Included workflows
 
@@ -46,5 +58,7 @@ The server binds to loopback by default and has no authentication. Keep it on th
 - Validated order creation with persisted order lines and server-calculated pricing
 - Menu item creation, editing, and availability controls
 - Inventory restocking and reorder point management
+- Authenticated staff accounts with admin, manager, and staff roles
+- Session sign-in/sign-out and server-enforced permissions
 
 Run `npm test` for TypeScript checks and API workflow tests. Run `npm run build` to type-check both applications and create the production frontend and backend outputs.

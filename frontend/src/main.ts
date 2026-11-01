@@ -10,6 +10,12 @@ interface Order {
   id: number; order_number: string; customer_name: string; table_number: string;
   status: string; total_cents: number; created_at: string; item_count: number; items: string | null;
 }
+interface User {
+  id: number; username: string; displayName: string; role: "admin" | "manager" | "staff";
+}
+interface StaffMember {
+  id: number; username: string; display_name: string; role: User["role"]; active: number; created_at: string;
+}
 interface WeeklySale { date: string; revenueCents: number }
 interface Dashboard {
   stats: { revenueCents: number; activeOrders: number; orderCount: number; averageCents: number; lowStockCount: number };
@@ -23,6 +29,7 @@ const state = {
   menu: [] as MenuItem[],
   inventory: [] as InventoryItem[],
   currentView: "dashboard",
+  user: null as User | null,
   theme: "light" as "light" | "dark",
   searchTimer: 0,
   ordersPage: 1,
@@ -47,8 +54,34 @@ async function api<T = any>(url: string, options: RequestInit = {}): Promise<T> 
   } catch {
     throw new Error("The server returned an unexpected response");
   }
-  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = Object.assign(new Error(payload.error || `Request failed (${response.status})`), { status: response.status });
+    if (response.status === 401 && url !== "/api/auth/login" && url !== "/api/auth/me") showLogin();
+    throw error;
+  }
   return payload;
+}
+
+function showLogin(message = "") {
+  state.user = null;
+  $("#app-shell").hidden = true;
+  $("#login-error").textContent = message;
+  const dialog = $("#login-dialog") as HTMLDialogElement;
+  if (!dialog.open) dialog.showModal();
+}
+
+async function showApp(user: User) {
+  state.user = user;
+  $("#profile-name").textContent = user.displayName;
+  $("#profile-role").textContent = user.role[0].toUpperCase() + user.role.slice(1);
+  const initials = user.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  $("#profile-avatar").textContent = initials;
+  $("#topbar-avatar").textContent = initials;
+  $("#team-nav").hidden = user.role === "staff";
+  $("#app-shell").hidden = false;
+  const dialog = $("#login-dialog") as HTMLDialogElement;
+  if (dialog.open) dialog.close();
+  await Promise.all([loadDashboard(), loadInventory()]);
 }
 
 function toast(message: string, error = false) {
@@ -256,6 +289,23 @@ async function loadInventory() {
   }
 }
 
+async function loadStaff() {
+  try {
+    const staff = await api<StaffMember[]>("/api/staff");
+    $("#staff-table").innerHTML = staff.map((member) => `
+      <tr>
+        <td class="customer-cell">${escapeHtml(member.display_name)}</td>
+        <td>${escapeHtml(member.username)}</td>
+        <td>${escapeHtml(member.role[0].toUpperCase() + member.role.slice(1))}</td>
+        <td><span class="inventory-status${member.active ? "" : " low"}">${member.active ? "● Active" : "● Inactive"}</span></td>
+        <td class="align-right"><button class="row-action" type="button" data-staff-active="${member.id}" data-active="${member.active ? "true" : "false"}">${member.active ? "Deactivate" : "Reactivate"}</button></td>
+      </tr>`).join("");
+    $("#staff-empty").hidden = staff.length > 0;
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 async function showView(name: string) {
   state.currentView = name;
   $$(".view-panel").forEach((panel) => {
@@ -264,13 +314,14 @@ async function showView(name: string) {
     panel.classList.toggle("is-visible", visible);
   });
   $$(".nav-link").forEach((button) => button.classList.toggle("is-active", button.dataset.view === name));
-  const label = ({ dashboard: "Overview", orders: "Orders", menu: "Menu", inventory: "Inventory" } as Record<string, string>)[name];
+  const label = ({ dashboard: "Overview", orders: "Orders", menu: "Menu", inventory: "Inventory", staff: "Team" } as Record<string, string>)[name];
   $("#breadcrumb-current").textContent = label;
   $("#sidebar").classList.remove("is-open");
   if (name === "dashboard") await loadDashboard();
   if (name === "orders") await loadOrders();
   if (name === "menu") await loadMenu();
   if (name === "inventory") await loadInventory();
+  if (name === "staff") await loadStaff();
 }
 
 function orderLine() {
@@ -331,6 +382,38 @@ document.addEventListener("click", async (event) => {
       localStorage.setItem("mhru-cafe-theme", theme);
     } catch {
       toast("Theme changed, but your preference could not be saved.", true);
+    }
+    return;
+  }
+  if (target.closest("#logout-button")) {
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+      showLogin("You have signed out.");
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+  if (target.closest("#add-staff-button")) {
+    $("#staff-form").reset();
+    $("#staff-error").textContent = "";
+    $("#staff-role-field").hidden = state.user?.role !== "admin";
+    $("#staff-dialog").showModal();
+    return;
+  }
+  const staffActiveButton = target.closest("[data-staff-active]");
+  if (staffActiveButton) {
+    staffActiveButton.disabled = true;
+    try {
+      await api(`/api/staff/${staffActiveButton.dataset.staffActive}/active`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: staffActiveButton.dataset.active !== "true" }),
+      });
+      await loadStaff();
+      toast("Staff account updated.");
+    } catch (error) {
+      staffActiveButton.disabled = false;
+      toast(error.message, true);
     }
     return;
   }
@@ -537,7 +620,45 @@ $("#restock-form").addEventListener("submit", async (event: SubmitEvent) => {
   }
 });
 
-function init() {
+$("#login-form").addEventListener("submit", async (event: SubmitEvent) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const submit = $('button[type="submit"]', form);
+  const values = new FormData(form);
+  submit.disabled = true;
+  try {
+    const result = await api<{ user: User }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username: values.get("username"), password: values.get("password") }),
+    });
+    form.reset();
+    await showApp(result.user);
+  } catch (error) {
+    showError($("#login-error"), error);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+$("#staff-form").addEventListener("submit", async (event: SubmitEvent) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const values = Object.fromEntries(new FormData(form));
+  const submit = $('button[type="submit"]', form);
+  submit.disabled = true;
+  try {
+    await api("/api/staff", { method: "POST", body: JSON.stringify(values) });
+    $("#staff-dialog").close();
+    toast("Staff account created.");
+    await loadStaff();
+  } catch (error) {
+    showError($("#staff-error"), error);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+async function init() {
   initializeTheme();
   const now = new Date();
   const hour = now.getHours();
@@ -545,8 +666,12 @@ function init() {
   $("#topbar-date").textContent = friendlyDate(now);
   $("#year").textContent = now.getFullYear();
   $$(".footer-year").forEach((element) => { element.textContent = now.getFullYear(); });
-  loadDashboard();
-  loadInventory();
+  try {
+    const result = await api<{ user: User }>("/api/auth/me");
+    await showApp(result.user);
+  } catch (error) {
+    showLogin(error.status === 401 ? "" : error.message);
+  }
 }
 
 init();
