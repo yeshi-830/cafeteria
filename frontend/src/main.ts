@@ -23,6 +23,7 @@ const state = {
   menu: [] as MenuItem[],
   inventory: [] as InventoryItem[],
   currentView: "dashboard",
+  theme: "light" as "light" | "dark",
   searchTimer: 0,
   ordersPage: 1,
   ordersRequest: 0,
@@ -56,6 +57,24 @@ function toast(message: string, error = false) {
   node.textContent = message;
   $("#toast-region").append(node);
   window.setTimeout(() => node.remove(), 3500);
+}
+
+function applyTheme(theme: "light" | "dark") {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  $('meta[name="theme-color"]').content = theme === "dark" ? "#171e1a" : "#f6f7f5";
+  const label = theme === "dark" ? "Switch to day mode" : "Switch to night mode";
+  $("#theme-toggle").setAttribute("aria-label", label);
+  $("#theme-toggle").title = label;
+}
+
+function initializeTheme() {
+  try {
+    const savedTheme = localStorage.getItem("mhru-cafe-theme");
+    if (savedTheme === "light" || savedTheme === "dark") applyTheme(savedTheme);
+  } catch {
+    toast("Could not load your saved theme preference.", true);
+  }
 }
 
 function friendlyDate(date: Date = new Date()) {
@@ -305,6 +324,16 @@ function showError(element: HTMLElement, error: Error) {
 document.addEventListener("click", async (event) => {
   if (!(event.target instanceof Element)) return;
   const target: any = event.target;
+  if (target.closest("#theme-toggle")) {
+    const theme = state.theme === "dark" ? "light" : "dark";
+    applyTheme(theme);
+    try {
+      localStorage.setItem("mhru-cafe-theme", theme);
+    } catch {
+      toast("Theme changed, but your preference could not be saved.", true);
+    }
+    return;
+  }
   const viewButton = target.closest("[data-view]");
   if (viewButton) {
     await showView(viewButton.dataset.view);
@@ -509,6 +538,7 @@ $("#restock-form").addEventListener("submit", async (event: SubmitEvent) => {
 });
 
 function init() {
+  initializeTheme();
   const now = new Date();
   const hour = now.getHours();
   $("#greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : "EVENING"}, JORDAN`;
