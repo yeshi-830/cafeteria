@@ -1,5 +1,5 @@
 {
-  "name": "harbor-cafe-management",
+  "name": "mhru-cafe-management",
   "version": "1.0.0",
   "private": true,
   "description": "A full-stack cafeteria management dashboard backed by SQLite.",

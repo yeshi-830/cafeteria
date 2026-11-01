@@ -427,7 +427,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Harbor Cafe is running at http://localhost:${port}`);
+  console.log(`mhru cafe is running at http://localhost:${port}`);
   console.log(`SQLite database: ${databasePath}`);
 });
 

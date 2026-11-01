@@ -1,4 +1,4 @@
-# Harbor Cafe
+# mhru cafe
 
 A lightweight cafeteria management dashboard built with Node.js, a local SQLite
 database, and a responsive browser-based interface. It has no third-party
