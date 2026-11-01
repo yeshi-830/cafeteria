@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css">
-    <script src="/app.js" defer></script>
+    <link rel="stylesheet" href="/src/app.css">
+    <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
     <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -121,7 +121,7 @@
                 <div><h2>Recent orders</h2><p>A little snapshot of your service</p></div>
                 <button class="text-button" data-view="orders">All orders <svg><use href="#icon-chevron"/></svg></button>
               </div>
-              <div class="table-scroll"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>TIME</th><th>STATUS</th><th class="align-right">TOTAL</th></tr></thead><tbody id="recent-orders"></tbody></table></div>
+              <div class="table-scroll"><table><caption class="sr-only">Recent cafe orders</caption><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>TIME</th><th>STATUS</th><th class="align-right">TOTAL</th></tr></thead><tbody id="recent-orders"></tbody></table></div>
             </article>
 
             <article class="panel activity-panel">
@@ -142,7 +142,7 @@
                 <div class="search-box"><svg><use href="#icon-search"/></svg><input id="order-search" type="search" placeholder="Search orders, customers…" aria-label="Search orders"></div>
                 <label class="filter-label"><span>Show</span><select id="order-filter" aria-label="Filter by status"><option>All</option><option>Received</option><option>Preparing</option><option>Ready</option><option>Completed</option><option>Cancelled</option></select></label>
               </div>
-              <div class="table-scroll"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>TIME</th><th>STATUS</th><th class="align-right">TOTAL</th><th></th></tr></thead><tbody id="orders-table"></tbody></table></div>
+              <div class="table-scroll"><table><caption class="sr-only">Order management queue</caption><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>TIME</th><th>STATUS</th><th class="align-right">TOTAL</th><th></th></tr></thead><tbody id="orders-table"></tbody></table></div>
               <div class="pagination" id="orders-pagination" aria-label="Orders pages"></div>
               <div class="panel-empty" id="orders-empty" hidden>No orders match your search yet.</div>
             </article>

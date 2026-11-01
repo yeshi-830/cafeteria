@@ -2,12 +2,29 @@
   "name": "mhru-cafe-management",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "A full-stack cafeteria management dashboard backed by SQLite.",
   "scripts": {
-    "start": "node server.js",
-    "test": "node --test"
+    "dev": "concurrently -k -n backend,frontend \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "tsx watch backend/src/server.ts",
+    "dev:frontend": "vite --config frontend/vite.config.ts",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc -p tsconfig.json",
+    "typecheck:frontend": "tsc -p frontend/tsconfig.json",
+    "build:frontend": "npm run typecheck:frontend && vite --config frontend/vite.config.ts build",
+    "start": "node dist/backend/src/server.js",
+    "test": "npm run build:backend && npm run typecheck:frontend && node --test"
   },
   "engines": {
     "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.0",
+    "tailwindcss": "^4.1.11",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
   }
 }

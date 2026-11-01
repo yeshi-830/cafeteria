@@ -31,7 +31,7 @@ before(async () => {
   tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "cafeteria-tests-"));
   const port = await availablePort();
   baseUrl = `http://127.0.0.1:${port}`;
-  serverProcess = spawn(process.execPath, [path.join(project, "server.js")], {
+  serverProcess = spawn(process.execPath, [path.join(project, "dist", "backend", "src", "server.js")], {
     cwd: project,
     env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", CAFETERIA_DB_PATH: path.join(tempDirectory, "test.db") },
     stdio: "ignore",

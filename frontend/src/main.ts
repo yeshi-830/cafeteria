@@ -1,20 +1,41 @@
+interface MenuItem {
+  id: number; name: string; category: string; description: string;
+  price_cents: number; prep_minutes: number; available: number;
+}
+interface InventoryItem {
+  id: number; name: string; category: string; quantity: number;
+  unit: string; reorder_level: number; updated_at: string;
+}
+interface Order {
+  id: number; order_number: string; customer_name: string; table_number: string;
+  status: string; total_cents: number; created_at: string; item_count: number; items: string | null;
+}
+interface WeeklySale { date: string; revenueCents: number }
+interface Dashboard {
+  stats: { revenueCents: number; activeOrders: number; orderCount: number; averageCents: number; lowStockCount: number };
+  weeklySales: WeeklySale[];
+  orders: Order[];
+  popular: Array<{ id: number; name: string; category: string; price_cents: number; sold: number }>;
+  activities: Array<{ id: number; message: string; kind: string; created_at: string }>;
+}
+
 const state = {
-  menu: [],
-  inventory: [],
+  menu: [] as MenuItem[],
+  inventory: [] as InventoryItem[],
   currentView: "dashboard",
-  searchTimer: null,
+  searchTimer: 0,
   ordersPage: 1,
   ordersRequest: 0,
 };
 
-const $ = (selector, root = document) => root.querySelector(selector);
-const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const money = (cents) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+const $ = (selector: string, root: any = document): any => root.querySelector(selector);
+const $$ = (selector: string, root: any = document): any[] => [...root.querySelectorAll(selector)];
+const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-})[character]);
+})[character] ?? character);
 
-async function api(url, options = {}) {
+async function api<T = any>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
     headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers },
@@ -29,7 +50,7 @@ async function api(url, options = {}) {
   return payload;
 }
 
-function toast(message, error = false) {
+function toast(message: string, error = false) {
   const node = document.createElement("div");
   node.className = `toast${error ? " error" : ""}`;
   node.textContent = message;
@@ -37,26 +58,26 @@ function toast(message, error = false) {
   window.setTimeout(() => node.remove(), 3500);
 }
 
-function friendlyDate(date = new Date()) {
+function friendlyDate(date: Date = new Date()) {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(date);
 }
 
-function compactTime(value) {
+function compactTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function statusClass(status) {
+function statusClass(status: string) {
   return `status-${String(status).toLowerCase()}`;
 }
 
-function statusBadge(status) {
+function statusBadge(status: string) {
   return `<span class="status-pill ${statusClass(status)}">${escapeHtml(status)}</span>`;
 }
 
-function nextAction(status) {
+function nextAction(status: string) {
   return {
     Received: { next: "Preparing", label: "Start" },
     Preparing: { next: "Ready", label: "Mark ready" },
@@ -64,7 +85,7 @@ function nextAction(status) {
   }[status] || null;
 }
 
-function orderRow(order, withAction = false) {
+function orderRow(order: Order, withAction = false) {
   const action = nextAction(order.status);
   const controls = withAction && action
     ? `<div class="order-actions"><button class="row-action" data-order-id="${order.id}" data-next-status="${action.next}">${action.label}</button><button class="row-action cancel-order" data-order-id="${order.id}" data-next-status="Cancelled" aria-label="Cancel ${escapeHtml(order.order_number)}">Cancel</button></div>`
@@ -80,7 +101,7 @@ function orderRow(order, withAction = false) {
   </tr>`;
 }
 
-function renderChart(sales) {
+function renderChart(sales: WeeklySale[]) {
   const width = 600;
   const height = 155;
   const left = 44;
@@ -111,7 +132,7 @@ function renderChart(sales) {
   $("#sales-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Sales over the last seven days">${grid}<defs><linearGradient id="sales-gradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6eac88" stop-opacity=".2"/><stop offset="100%" stop-color="#6eac88" stop-opacity="0"/></linearGradient></defs><path class="chart-fill" d="${area}"/><path class="chart-line" d="${line}"/>${dots}${labels}</svg>`;
 }
 
-function foodEmoji(item) {
+function foodEmoji(item: Pick<MenuItem, "name" | "category">) {
   const value = `${item.name} ${item.category}`.toLowerCase();
   if (value.includes("coffee") || value.includes("matcha") || value.includes("drink")) return "☕";
   if (value.includes("toast") || value.includes("breakfast")) return "🥑";
@@ -123,14 +144,14 @@ function foodEmoji(item) {
   return "🍽️";
 }
 
-function renderPopular(items) {
+function renderPopular(items: Dashboard["popular"]) {
   $("#popular-list").innerHTML = items.length
     ? items.map((item) => `<div class="popular-item"><span class="food-emoji">${foodEmoji(item)}</span><div class="popular-copy"><strong>${escapeHtml(item.name)}</strong><span>${Number(item.sold)} ordered · ${escapeHtml(item.category)}</span></div><span class="popular-price">${money(item.price_cents)}</span></div>`).join("")
     : '<div class="table-empty">Your customer favorites will show up here.</div>';
 }
 
-function renderActivities(items) {
-  const marks = { order: "↗", inventory: "▤", service: "✦" };
+function renderActivities(items: Dashboard["activities"]) {
+  const marks: Record<string, string> = { order: "↗", inventory: "▤", service: "✦" };
   $("#activity-list").innerHTML = items.length
     ? items.map((item) => `<div class="activity-item"><span class="activity-mark ${escapeHtml(item.kind)}">${marks[item.kind] || "•"}</span><span class="activity-message">${escapeHtml(item.message)}</span><time>${escapeHtml(compactTime(item.created_at))}</time></div>`).join("")
     : '<div class="table-empty">Your team updates will show up here.</div>';
@@ -138,7 +159,7 @@ function renderActivities(items) {
 
 async function loadDashboard() {
   try {
-    const data = await api("/api/dashboard");
+    const data = await api<Dashboard>("/api/dashboard");
     $("#stat-revenue").textContent = money(data.stats.revenueCents);
     $("#stat-active").textContent = data.stats.activeOrders;
     $("#stat-orders").textContent = data.stats.orderCount;
@@ -170,9 +191,9 @@ async function loadOrders() {
     const status = $("#order-filter").value;
     if (search) params.set("q", search);
     if (status !== "All") params.set("status", status);
-    params.set("page", state.ordersPage);
+    params.set("page", String(state.ordersPage));
     params.set("pageSize", "25");
-    const result = await api(`/api/orders?${params}`);
+    const result = await api<{ items: Order[]; total: number; page: number; pageSize: number }>(`/api/orders?${params}`);
     if (requestId !== state.ordersRequest) return;
     $("#orders-table").innerHTML = result.items.map((order) => orderRow(order, true)).join("");
     $("#orders-empty").hidden = result.total > 0;
@@ -185,7 +206,7 @@ async function loadOrders() {
 
 async function loadMenu() {
   try {
-    state.menu = await api("/api/menu");
+    state.menu = await api<MenuItem[]>("/api/menu");
     const categories = [...new Set(state.menu.map((item) => item.category))];
     $("#menu-summary").textContent = `${state.menu.length} ${state.menu.length === 1 ? "thoughtful dish" : "thoughtful dishes"} across ${categories.length} ${categories.length === 1 ? "category" : "categories"}.`;
     $("#menu-grid").innerHTML = state.menu.map((item) => `<article class="menu-card">
@@ -201,7 +222,7 @@ async function loadMenu() {
 
 async function loadInventory() {
   try {
-    state.inventory = await api("/api/inventory");
+    state.inventory = await api<InventoryItem[]>("/api/inventory");
     const lowItems = state.inventory.filter((item) => item.quantity <= item.reorder_level);
     const totalUnits = state.inventory.reduce((sum, item) => sum + item.quantity, 0);
     $("#inventory-summary").innerHTML = `<div class="summary-chip"><span class="summary-chip-icon">▤</span><span class="summary-chip-copy"><strong>${state.inventory.length}</strong><span>Tracked ingredients</span></span></div><div class="summary-chip"><span class="summary-chip-icon">↗</span><span class="summary-chip-copy"><strong>${totalUnits}</strong><span>Total units on hand</span></span></div><div class="summary-chip"><span class="summary-chip-icon${lowItems.length ? " warn" : ""}">!</span><span class="summary-chip-copy"><strong>${lowItems.length}</strong><span>Items below reorder point</span></span></div>`;
@@ -216,7 +237,7 @@ async function loadInventory() {
   }
 }
 
-async function showView(name) {
+async function showView(name: string) {
   state.currentView = name;
   $$(".view-panel").forEach((panel) => {
     const visible = panel.id === `view-${name}`;
@@ -224,7 +245,7 @@ async function showView(name) {
     panel.classList.toggle("is-visible", visible);
   });
   $$(".nav-link").forEach((button) => button.classList.toggle("is-active", button.dataset.view === name));
-  const label = { dashboard: "Overview", orders: "Orders", menu: "Menu", inventory: "Inventory" }[name];
+  const label = ({ dashboard: "Overview", orders: "Orders", menu: "Menu", inventory: "Inventory" } as Record<string, string>)[name];
   $("#breadcrumb-current").textContent = label;
   $("#sidebar").classList.remove("is-open");
   if (name === "dashboard") await loadDashboard();
@@ -252,7 +273,7 @@ function updateOrderTotal() {
 
 async function openOrderDialog() {
   try {
-    if (!state.menu.length) state.menu = await api("/api/menu");
+    if (!state.menu.length) state.menu = await api<MenuItem[]>("/api/menu");
     $("#order-form").reset();
     $("#order-error").textContent = "";
     $("#order-lines").innerHTML = orderLine();
@@ -263,7 +284,7 @@ async function openOrderDialog() {
   }
 }
 
-function openRestockDialog(itemId = "") {
+function openRestockDialog(itemId: string | number = "") {
   if (!state.inventory.length) {
     toast("Inventory is still loading. Please try again.", true);
     return;
@@ -277,17 +298,19 @@ function openRestockDialog(itemId = "") {
   $("#restock-dialog").showModal();
 }
 
-function showError(element, error) {
+function showError(element: HTMLElement, error: Error) {
   element.textContent = error.message;
 }
 
 document.addEventListener("click", async (event) => {
-  const viewButton = event.target.closest("[data-view]");
+  if (!(event.target instanceof Element)) return;
+  const target: any = event.target;
+  const viewButton = target.closest("[data-view]");
   if (viewButton) {
     await showView(viewButton.dataset.view);
     return;
   }
-  const actionButton = event.target.closest("[data-action]");
+  const actionButton = target.closest("[data-action]");
   if (actionButton) {
     if (actionButton.dataset.action === "new-order") await openOrderDialog();
     if (actionButton.dataset.action === "new-menu-item") {
@@ -302,23 +325,23 @@ document.addEventListener("click", async (event) => {
     if (actionButton.dataset.action === "restock") openRestockDialog();
     return;
   }
-  const pageButton = event.target.closest("[data-orders-page]");
+  const pageButton = target.closest("[data-orders-page]");
   if (pageButton && !pageButton.disabled) {
     state.ordersPage = Number(pageButton.dataset.ordersPage);
     await loadOrders();
     return;
   }
-  const editMenuButton = event.target.closest("[data-menu-edit]");
+  const editMenuButton = target.closest("[data-menu-edit]");
   if (editMenuButton) {
     const item = state.menu.find((entry) => entry.id === Number(editMenuButton.dataset.menuEdit));
     if (!item) return;
     const form = $("#menu-form");
     form.dataset.editingId = item.id;
-    form.elements.name.value = item.name;
-    form.elements.category.value = item.category;
-    form.elements.price.value = (item.price_cents / 100).toFixed(2);
-    form.elements.prepMinutes.value = item.prep_minutes;
-    form.elements.description.value = item.description;
+    (form.elements.namedItem("name") as HTMLInputElement).value = item.name;
+    (form.elements.namedItem("category") as HTMLInputElement).value = item.category;
+    (form.elements.namedItem("price") as HTMLInputElement).value = (item.price_cents / 100).toFixed(2);
+    (form.elements.namedItem("prepMinutes") as HTMLInputElement).value = String(item.prep_minutes);
+    (form.elements.namedItem("description") as HTMLTextAreaElement).value = item.description;
     $("#menu-error").textContent = "";
     $("#menu-dialog h2").textContent = "Edit menu item";
     $("#menu-dialog .dialog-heading p:not(.eyebrow)").textContent = "Update the details your team uses to serve it.";
@@ -326,7 +349,7 @@ document.addEventListener("click", async (event) => {
     $("#menu-dialog").showModal();
     return;
   }
-  const toggleMenuButton = event.target.closest("[data-menu-toggle]");
+  const toggleMenuButton = target.closest("[data-menu-toggle]");
   if (toggleMenuButton) {
     toggleMenuButton.disabled = true;
     try {
@@ -341,17 +364,17 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
-  const closeButton = event.target.closest("[data-close-dialog]");
+  const closeButton = target.closest("[data-close-dialog]");
   if (closeButton) {
-    document.getElementById(closeButton.dataset.closeDialog).close();
+    $(`#${closeButton.dataset.closeDialog}`).close();
     return;
   }
-  const restockButton = event.target.closest("[data-restock-id]");
+  const restockButton = target.closest("[data-restock-id]");
   if (restockButton) {
     openRestockDialog(restockButton.dataset.restockId);
     return;
   }
-  const statusButton = event.target.closest("[data-next-status]");
+  const statusButton = target.closest("[data-next-status]");
   if (statusButton) {
     statusButton.disabled = true;
     try {
@@ -367,7 +390,7 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
-  const removeButton = event.target.closest(".remove-line");
+  const removeButton = target.closest(".remove-line");
   if (removeButton) {
     const lines = $$(".order-line", $("#order-lines"));
     if (lines.length > 1) removeButton.closest(".order-line").remove();
@@ -375,39 +398,43 @@ document.addEventListener("click", async (event) => {
     updateOrderTotal();
     return;
   }
-  if (event.target === $("#mobile-menu") || event.target.closest("#mobile-menu")) {
+  if (target === $("#mobile-menu") || target.closest("#mobile-menu")) {
     $("#sidebar").classList.toggle("is-open");
-  } else if (!event.target.closest("#sidebar")) {
+  } else if (!target.closest("#sidebar")) {
     $("#sidebar").classList.remove("is-open");
   }
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.matches("#order-filter")) { state.ordersPage = 1; loadOrders(); }
-  if (event.target.matches("#restock-item")) {
-    const item = state.inventory.find((entry) => entry.id === Number(event.target.value));
+  if (!(event.target instanceof Element)) return;
+  const target: any = event.target;
+  if (target.matches("#order-filter")) { state.ordersPage = 1; loadOrders(); }
+  if (target.matches("#restock-item")) {
+    const item = state.inventory.find((entry) => entry.id === Number(target.value));
     $("#restock-reorder-level").value = item?.reorder_level ?? "";
   }
-  if (event.target.matches(".order-line select, .order-line input")) updateOrderTotal();
+  if (target.matches(".order-line select, .order-line input")) updateOrderTotal();
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.matches("#order-search")) {
+  if (!(event.target instanceof Element)) return;
+  const target: any = event.target;
+  if (target.matches("#order-search")) {
     state.ordersPage = 1;
     window.clearTimeout(state.searchTimer);
     state.searchTimer = window.setTimeout(loadOrders, 180);
   }
-  if (event.target.matches(".order-line input")) updateOrderTotal();
+  if (target.matches(".order-line input")) updateOrderTotal();
 });
 
-$("#order-form").addEventListener("submit", async (event) => {
+$("#order-form").addEventListener("submit", async (event: SubmitEvent) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const form = new FormData(event.currentTarget as HTMLFormElement);
   const items = $$(".order-line", $("#order-lines")).map((line) => ({
     menuItemId: Number($("select", line).value),
     quantity: Number($("input", line).value),
   }));
-  const submit = $('button[type="submit"]', event.currentTarget);
+  const submit = $('button[type="submit"]', event.currentTarget as HTMLFormElement);
   submit.disabled = true;
   try {
     await api("/api/orders", {
@@ -437,16 +464,17 @@ $("#add-order-line").addEventListener("click", () => {
   $("#order-error").textContent = "";
 });
 
-$("#menu-form").addEventListener("submit", async (event) => {
+$("#menu-form").addEventListener("submit", async (event: SubmitEvent) => {
   event.preventDefault();
-  const data = Object.fromEntries(new FormData(event.currentTarget));
-  const submit = $('button[type="submit"]', event.currentTarget);
+  const formElement = event.currentTarget as HTMLFormElement;
+  const data = Object.fromEntries(new FormData(formElement));
+  const submit = $('button[type="submit"]', formElement);
   submit.disabled = true;
   try {
-    const editingId = event.currentTarget.dataset.editingId;
+    const editingId = formElement.dataset.editingId;
     await api(editingId ? `/api/menu/${editingId}` : "/api/menu", { method: editingId ? "PATCH" : "POST", body: JSON.stringify(data) });
     $("#menu-dialog").close();
-    delete event.currentTarget.dataset.editingId;
+    delete formElement.dataset.editingId;
     toast(editingId ? "Menu item updated." : "Your new menu item is ready to go.");
     await Promise.all([loadMenu(), loadDashboard()]);
   } catch (error) {
@@ -456,11 +484,11 @@ $("#menu-form").addEventListener("submit", async (event) => {
   }
 });
 
-$("#restock-form").addEventListener("submit", async (event) => {
+$("#restock-form").addEventListener("submit", async (event: SubmitEvent) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const form = new FormData(event.currentTarget as HTMLFormElement);
   const quantity = Number(form.get("quantity"));
-  const submit = $('button[type="submit"]', event.currentTarget);
+  const submit = $('button[type="submit"]', event.currentTarget as HTMLFormElement);
   submit.disabled = true;
   try {
     await api(`/api/inventory/${form.get("inventoryId")}/restock`, {

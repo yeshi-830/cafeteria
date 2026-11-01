@@ -1,43 +1,50 @@
 # mhru cafe
 
-A lightweight cafeteria management dashboard built with Node.js, a local SQLite
-database, and a responsive browser-based interface. It has no third-party
-package dependencies.
+A cafe operations dashboard built with a TypeScript frontend, Tailwind CSS, a TypeScript Node API, and SQLite. The project is split into independently maintained frontend, backend, and database source areas while retaining the existing dashboard and its workflows.
+
+## Project layout
+
+```text
+frontend/      Vite UI, TypeScript browser logic, Tailwind and dashboard styles
+backend/       Node HTTP server and API routes
+database/      SQLite connection, schema, indexes, and initial seed data
+tests/         API workflow tests using an isolated temporary SQLite database
+```
 
 ## Requirements
 
-- Node.js 22.13 or newer (the built-in `node:sqlite` module is used)
+- Node.js 22.13 or newer (SQLite uses the built-in `node:sqlite` module)
 
-## Run locally
+## Install and run
 
-```powershell
-node server.js
+```sh
+npm install
+npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The app binds to loopback
-by default and is intended for one trusted operator on the same machine. It has
-no authentication. Do not expose it to a network; remote or multi-user use
-requires authentication, authorization, and HTTPS. Set `HOST` only when you
-have configured those protections. The database is created as
-`cafeteria.db` in the project directory on first run and seeded with sample
-menu, inventory, and order data. Set `PORT` or `CAFETERIA_DB_PATH` to override
-the default server port or database location. `HOST` can override the default
-`127.0.0.1` bind address.
+Open <http://127.0.0.1:5173>. The development command starts Vite and the API together; Vite proxies `/api` calls to port 3000. To run each process in its own terminal, use `npm run dev:frontend` and `npm run dev:backend`.
+
+For a production build and run:
+
+```sh
+npm run build
+npm start
+```
+
+The production app is served from <http://127.0.0.1:3000>.
+
+## Database and configuration
+
+SQLite uses `cafeteria.db` in the project root by default. Existing data is preserved. Sample menu, inventory, and order rows are only seeded when their respective tables are empty. Set `CAFETERIA_DB_PATH` to use another SQLite file, `PORT` to change the API port, or `HOST` to change the bind address.
+
+The server binds to loopback by default and has no authentication. Keep it on the local machine. Remote or multi-user use requires authentication, authorization, and HTTPS before binding to a network interface.
 
 ## Included workflows
 
-- Live dashboard metrics, seven-day sales, and latest orders
-- Searchable and filterable, paginated order queue with status progression
-- New order creation with server-side validation and persisted order items
-- Menu listing, creation, editing, and availability controls
-- Inventory monitoring, stock restocking, and reorder point updates
-- Activity history for order and inventory changes
+- Dashboard metrics, seven-day sales, latest orders, popular items, and activity history
+- Searchable and filterable paginated order queue with status progression
+- Validated order creation with persisted order lines and server-calculated pricing
+- Menu item creation, editing, and availability controls
+- Inventory restocking and reorder point management
 
-## Tests
-
-Run the API workflow tests with `npm test`. They use a temporary SQLite
-database and do not modify the project's local database.
-
-This is a local, single-operator starter and does not include user
-authentication. Keep it loopback-only unless you add authentication,
-authorization, and HTTPS.
+Run `npm test` for TypeScript checks and API workflow tests. Run `npm run build` to type-check both applications and create the production frontend and backend outputs.
