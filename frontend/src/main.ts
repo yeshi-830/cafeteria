@@ -28,6 +28,7 @@ interface Dashboard {
 const state = {
   menu: [] as MenuItem[],
   inventory: [] as InventoryItem[],
+  recentOrders: [] as Order[],
   currentView: "dashboard",
   user: null as User | null,
   theme: "light" as "light" | "dark",
@@ -70,10 +71,19 @@ function showLogin(message = "") {
   if (!dialog.open) dialog.showModal();
 }
 
+function updateNotificationIndicator() {
+  const hasLowStock = state.inventory.some((item) => item.quantity <= item.reorder_level);
+  const hasOpenOrders = state.recentOrders.some((order) => !["Completed", "Cancelled"].includes(order.status));
+  $("#notification-dot").hidden = !hasLowStock && !hasOpenOrders;
+}
+
 async function showApp(user: User) {
   state.user = user;
   $("#profile-name").textContent = user.displayName;
   $("#profile-role").textContent = user.role[0].toUpperCase() + user.role.slice(1);
+  $("#service-user-role").textContent = user.role[0].toUpperCase() + user.role.slice(1);
+  const hour = new Date().getHours();
+  $("#greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : "EVENING"}, ${user.displayName.toUpperCase()}`;
   const initials = user.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   $("#profile-avatar").textContent = initials;
   $("#topbar-avatar").textContent = initials;
@@ -90,6 +100,23 @@ function toast(message: string, error = false) {
   node.textContent = message;
   $("#toast-region").append(node);
   window.setTimeout(() => node.remove(), 3500);
+}
+
+function openNotifications() {
+  const lowStock = state.inventory.filter((item) => item.quantity <= item.reorder_level);
+  const openOrders = state.recentOrders.filter((order) => !["Completed", "Cancelled"].includes(order.status));
+  const sections = [
+    lowStock.length
+      ? `<section class="notification-section"><h3>Low stock · ${lowStock.length}</h3>${lowStock.map((item) => `<p><strong>${escapeHtml(item.name)}</strong><span>${Number(item.quantity)} ${escapeHtml(item.unit)} on hand · reorder at ${Number(item.reorder_level)}</span></p>`).join("")}<button class="text-button" type="button" data-review-view="inventory">Review inventory</button></section>`
+      : "",
+    openOrders.length
+      ? `<section class="notification-section"><h3>Recent open orders · ${openOrders.length}</h3>${openOrders.map((order) => `<p><strong>${escapeHtml(order.order_number)} · ${escapeHtml(order.customer_name)}</strong><span>${escapeHtml(order.status)} · ${money(order.total_cents)}</span></p>`).join("")}<button class="text-button" type="button" data-review-view="orders">Review orders</button></section>`
+      : "",
+  ].filter(Boolean);
+  $("#notification-list").innerHTML = sections.length
+    ? sections.join("")
+    : '<p class="notification-empty">No low-stock items or recent open orders need attention.</p>';
+  $("#notifications-dialog").showModal();
 }
 
 function applyTheme(theme: "light" | "dark") {
@@ -227,6 +254,8 @@ async function loadDashboard() {
     renderChart(data.weeklySales);
     renderPopular(data.popular);
     renderActivities(data.activities);
+    state.recentOrders = data.orders;
+    updateNotificationIndicator();
     $("#recent-orders").innerHTML = data.orders.length
       ? data.orders.map((order) => orderRow(order)).join("")
       : '<tr><td class="table-empty" colspan="6">No orders just yet. Your next great service starts here.</td></tr>';
@@ -284,6 +313,7 @@ async function loadInventory() {
       return `<tr><td class="customer-cell">${escapeHtml(item.name)}</td><td>${escapeHtml(item.category)}</td><td><strong class="quantity-cell">${Number(item.quantity)} ${escapeHtml(item.unit)}</strong></td><td>${Number(item.reorder_level)} ${escapeHtml(item.unit)}</td><td><span class="inventory-status${low ? " low" : ""}">${low ? "● Low stock" : "● In stock"}</span></td><td class="align-right"><button class="row-action" data-restock-id="${item.id}">Restock</button></td></tr>`;
     }).join("");
     $("#nav-stock-dot").hidden = lowItems.length === 0;
+    updateNotificationIndicator();
   } catch (error) {
     toast(error.message, true);
   }
@@ -383,6 +413,22 @@ document.addEventListener("click", async (event) => {
     } catch {
       toast("Theme changed, but your preference could not be saved.", true);
     }
+    return;
+  }
+  if (target.closest("#change-password-button")) {
+    $("#password-form").reset();
+    $("#password-error").textContent = "";
+    $("#password-dialog").showModal();
+    return;
+  }
+  if (target.closest("#notification-button")) {
+    openNotifications();
+    return;
+  }
+  const reviewViewButton = target.closest("[data-review-view]");
+  if (reviewViewButton) {
+    $("#notifications-dialog").close();
+    await showView(reviewViewButton.dataset.reviewView);
     return;
   }
   if (target.closest("#logout-button")) {
@@ -658,11 +704,35 @@ $("#staff-form").addEventListener("submit", async (event: SubmitEvent) => {
   }
 });
 
+$("#password-form").addEventListener("submit", async (event: SubmitEvent) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const values = new FormData(form);
+  const newPassword = String(values.get("newPassword") || "");
+  if (newPassword !== values.get("confirmPassword")) {
+    $("#password-error").textContent = "The new passwords do not match.";
+    return;
+  }
+  const submit = $('button[type="submit"]', form);
+  submit.disabled = true;
+  try {
+    await api("/api/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword: values.get("currentPassword"), newPassword }),
+    });
+    $("#password-dialog").close();
+    form.reset();
+    toast("Password updated. Other active sessions were signed out.");
+  } catch (error) {
+    showError($("#password-error"), error);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
 async function init() {
   initializeTheme();
   const now = new Date();
-  const hour = now.getHours();
-  $("#greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : "EVENING"}, JORDAN`;
   $("#topbar-date").textContent = friendlyDate(now);
   $("#year").textContent = now.getFullYear();
   $$(".footer-year").forEach((element) => { element.textContent = now.getFullYear(); });

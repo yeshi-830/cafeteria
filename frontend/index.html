@@ -47,15 +47,17 @@
 
         <div class="sidebar-bottom">
           <div class="service-card">
-            <div class="service-heading"><span class="live-dot"></span> SERVICE IS LIVE</div>
-            <p>Your dining room is looking good. Keep up the great work.</p>
-            <div class="service-progress"><span></span></div>
-            <div class="service-meta"><span>Today's shift</span><strong>9:00 AM – 6:00 PM</strong></div>
+            <div class="service-heading"><span class="live-dot"></span> CAFE OPERATIONS</div>
+            <p>Orders and stock levels are loaded from your cafe database.</p>
+            <div class="service-meta"><span>Signed in as</span><strong id="service-user-role"></strong></div>
           </div>
           <div class="profile">
             <div class="avatar" id="profile-avatar">JD</div>
             <div class="profile-copy"><strong id="profile-name"></strong><span id="profile-role"></span></div>
-            <button class="row-action" type="button" id="logout-button">Sign out</button>
+            <div class="profile-actions">
+              <button class="row-action" type="button" id="change-password-button">Password</button>
+              <button class="row-action" type="button" id="logout-button">Sign out</button>
+            </div>
           </div>
         </div>
       </aside>
@@ -71,7 +73,7 @@
               <svg class="theme-icon-sun" aria-hidden="true"><use href="#icon-sun"/></svg>
               <svg class="theme-icon-moon" aria-hidden="true"><use href="#icon-moon"/></svg>
             </button>
-            <button class="icon-button notification-button" aria-label="Notifications"><svg><use href="#icon-bell"/></svg><span></span></button>
+            <button class="icon-button notification-button" id="notification-button" aria-label="Operational alerts" title="Operational alerts"><svg><use href="#icon-bell"/></svg><span id="notification-dot" hidden></span></button>
             <div class="topbar-avatar" id="topbar-avatar">JD</div>
           </div>
         </header>
@@ -206,6 +208,22 @@
         <div class="form-error" id="login-error" role="alert"></div>
         <div class="dialog-actions"><button class="button button-primary" type="submit">Sign in</button></div>
       </form>
+    </dialog>
+
+    <dialog class="app-dialog app-dialog-compact" id="password-dialog">
+      <form id="password-form">
+        <div class="dialog-heading"><div><p class="eyebrow">KEEP YOUR ACCOUNT SECURE</p><h2>Change password</h2><p>Changing your password signs out other active sessions.</p></div><button class="dialog-close" type="button" data-close-dialog="password-dialog" aria-label="Close dialog">×</button></div>
+        <label class="form-field"><span>Current password</span><input name="currentPassword" type="password" autocomplete="current-password" maxlength="256" required></label>
+        <label class="form-field"><span>New password <em>at least 12 characters</em></span><input name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+        <label class="form-field"><span>Confirm new password</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+        <div class="form-error" id="password-error" role="alert"></div>
+        <div class="dialog-actions"><button class="button button-quiet" type="button" data-close-dialog="password-dialog">Cancel</button><button class="button button-primary" type="submit">Update password</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog app-dialog-compact" id="notifications-dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">LIVE CAFE DATA</p><h2>Operational alerts</h2><p>Items that may need attention.</p></div><button class="dialog-close" type="button" data-close-dialog="notifications-dialog" aria-label="Close dialog">×</button></div>
+      <div class="notification-list" id="notification-list"></div>
     </dialog>
 
     <dialog class="app-dialog" id="order-dialog">

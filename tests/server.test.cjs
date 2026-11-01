@@ -329,6 +329,33 @@ test("orders endpoint returns bounded, searchable pagination metadata", async ()
   assert.equal(invalidPageSize.response.status, 400);
 });
 
+test("password changes rotate sessions and require the current password", async () => {
+  const previousCookie = sessionCookie;
+  const invalidCurrent = await request("/api/auth/password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ currentPassword: "incorrect-password", newPassword: "new-admin-password-456" }),
+  });
+  assert.equal(invalidCurrent.response.status, 400);
+
+  const changed = await request("/api/auth/password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ currentPassword: "test-admin-password-123", newPassword: "new-admin-password-456" }),
+  });
+  assert.equal(changed.response.status, 200);
+  sessionCookie = changed.response.headers.get("set-cookie")?.split(";")[0];
+  assert.ok(sessionCookie);
+  const previousSession = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie: previousCookie } });
+  assert.equal(previousSession.status, 401);
+  const oldPassword = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "test-admin", password: "test-admin-password-123" }),
+  });
+  assert.equal(oldPassword.status, 401);
+});
+
 test("sign-out revokes the existing session", async () => {
   const logout = await request("/api/auth/logout", { method: "POST" });
   assert.equal(logout.response.status, 200);

@@ -17,7 +17,8 @@ const server = http.createServer(async (request: IncomingMessage, response: Serv
   }
   if (url.pathname.startsWith("/api/")) {
     const authRoute = url.pathname.startsWith("/api/auth/") || url.pathname === "/api/staff" || /^\/api\/staff\/\d+\/active$/.test(url.pathname);
-    const supportedMethod = url.pathname === "/api/auth/login" || url.pathname === "/api/auth/logout" || url.pathname === "/api/staff"
+    const supportedMethod = url.pathname === "/api/auth/login" || url.pathname === "/api/auth/logout"
+      || url.pathname === "/api/auth/password" || url.pathname === "/api/staff"
       ? url.pathname === "/api/staff" ? ["GET", "POST"] : ["POST"]
       : url.pathname === "/api/auth/me" ? ["GET"]
         : /^\/api\/staff\/\d+\/active$/.test(url.pathname) ? ["PATCH"]

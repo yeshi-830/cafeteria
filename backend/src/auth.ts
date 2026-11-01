@@ -292,6 +292,42 @@ export async function handleAuthRoute(
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/auth/password") {
+    if (!principal) {
+      sendJson(response, 401, { error: "Authentication required" });
+      return;
+    }
+    const body = await readBody(request);
+    const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+    const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+    const user = db.prepare("SELECT password_hash FROM users WHERE id = ? AND active = 1").get(principal.id);
+    if (!user || !verifyPassword(currentPassword, String(user.password_hash))) {
+      throw authError("Current password is incorrect.", 400);
+    }
+    if (newPassword.length < 12 || newPassword.length > 256) {
+      throw authError("New password must be between 12 and 256 characters.", 400);
+    }
+    if (verifyPassword(newPassword, String(user.password_hash))) {
+      throw authError("Choose a new password that differs from your current password.", 400);
+    }
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + SESSION_DURATION_MS;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(newPassword), principal.id);
+      db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(principal.id);
+      db.prepare("INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+        .run(hashSession(token), principal.id, expiresAt);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    setSessionCookie(response, token, SESSION_DURATION_MS / 1000);
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
   if (url.pathname === "/api/staff" && request.method === "GET") {
     if (!principal || !requireRole(principal, ["admin", "manager"])) {
       sendJson(response, 403, { error: "Only managers and admins can view staff accounts." });
