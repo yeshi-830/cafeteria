@@ -1,0 +1,12 @@
+{
+  "name": "harbor-cafe-management",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A full-stack cafeteria management dashboard backed by SQLite.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

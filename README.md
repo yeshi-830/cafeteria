@@ -1,108 +1,33 @@
-# cafeteria<!DOCTYPE html>
-<html>
-<head>
-  <title>Simple Calculator</title>
+# Harbor Cafe
 
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: #f2f2f2;
-      font-family: Arial;
-    }
+A lightweight cafeteria management dashboard built with Node.js, a local SQLite
+database, and a responsive browser-based interface. It has no third-party
+package dependencies.
 
-    .calculator {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0px 0px 10px gray;
-    }
+## Requirements
 
-    #display {
-      width: 100%;
-      height: 50px;
-      margin-bottom: 10px;
-      font-size: 24px;
-      text-align: right;
-      padding-right: 10px;
-    }
+- Node.js 22.13 or newer (the built-in `node:sqlite` module is used)
 
-    .buttons {
-      display: grid;
-      grid-template-columns: repeat(4, 70px);
-      gap: 10px;
-    }
+## Run locally
 
-    button {
-      height: 60px;
-      font-size: 20px;
-      border: none;
-      border-radius: 8px;
-      background: #4CAF50;
-      color: white;
-      cursor: pointer;
-    }
+```powershell
+node server.js
+```
 
-    button:hover {
-      background: #45a049;
-    }
+Open [http://localhost:3000](http://localhost:3000). The database is created as
+`cafeteria.db` in the project directory on first run and seeded with sample
+menu, inventory, and order data. Set `PORT` or `CAFETERIA_DB_PATH` to override
+the default server port or database location.
 
-    .equal {
-      background: orange;
-    }
+## Included workflows
 
-    .clear {
-      background: red;
-    }
-  </style>
-</head>
+- Live dashboard metrics, seven-day sales, and latest orders
+- Searchable and filterable order queue with status progression
+- New order creation with server-side validation and persisted order items
+- Menu listing and menu item creation
+- Inventory monitoring and stock restocking
+- Activity history for order and inventory changes
 
-<body>
-
-<div class="calculator">
-  <input type="text" id="display" disabled>
-
-  <div class="buttons">
-    <button onclick="appendValue('7')">7</button>
-    <button onclick="appendValue('8')">8</button>
-    <button onclick="appendValue('9')">9</button>
-    <button onclick="appendValue('/')">/</button>
-
-    <button onclick="appendValue('4')">4</button>
-    <button onclick="appendValue('5')">5</button>
-    <button onclick="appendValue('6')">6</button>
-    <button onclick="appendValue('*')">*</button>
-
-    <button onclick="appendValue('1')">1</button>
-    <button onclick="appendValue('2')">2</button>
-    <button onclick="appendValue('3')">3</button>
-    <button onclick="appendValue('-')">-</button>
-
-    <button onclick="appendValue('0')">0</button>
-    <button onclick="appendValue('.')">.</button>
-    <button class="equal" onclick="calculate()">=</button>
-    <button onclick="appendValue('+')">+</button>
-
-    <button class="clear" onclick="clearDisplay()">C</button>
-  </div>
-</div>
-
-<script>
-  function appendValue(value) {
-    document.getElementById("display").value += value;
-  }
-
-  function calculate() {
-    let result = eval(document.getElementById("display").value);
-    document.getElementById("display").value = result;
-  }
-
-  function clearDisplay() {
-    document.getElementById("display").value = "";
-  }
-</script>
-
-</body>
-</html>
+This is a local, single-operator starter and does not include user
+authentication. Add authentication and HTTPS before exposing it beyond a
+trusted local network.
