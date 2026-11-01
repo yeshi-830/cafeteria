@@ -14,6 +14,7 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
+:focus-visible { outline: 2px solid #236b51; outline-offset: 3px; }
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--canvas); color: var(--ink); }
@@ -312,4 +313,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .form-grid .form-field { margin-bottom: 12px; }
   .app-dialog { padding: 19px 16px; }
   .page-footer { font-size: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

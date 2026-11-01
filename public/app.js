@@ -459,18 +459,19 @@ $("#menu-form").addEventListener("submit", async (event) => {
 $("#restock-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  const quantity = Number(form.get("quantity"));
   const submit = $('button[type="submit"]', event.currentTarget);
   submit.disabled = true;
   try {
     await api(`/api/inventory/${form.get("inventoryId")}/restock`, {
       method: "POST",
       body: JSON.stringify({
-        quantity: Number(form.get("quantity")),
+        quantity,
         reorderLevel: form.get("reorderLevel") === "" ? null : Number(form.get("reorderLevel")),
       }),
     });
     $("#restock-dialog").close();
-    toast("Inventory updated. Nice and stocked.");
+    toast(quantity ? "Inventory updated. Nice and stocked." : "Reorder point updated.");
     await Promise.all([loadInventory(), loadDashboard()]);
   } catch (error) {
     showError($("#restock-error"), error);

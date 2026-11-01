@@ -217,10 +217,10 @@ function requireText(value, label, maxLength = 100) {
 
 function requirePriceCents(value) {
   const price = typeof value === "number" ? String(value) : value;
-  if (typeof price !== "string" || !/^\d+(?:\.\d{1,2})?$/.test(price)) {
+  if (typeof price !== "string" || !/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(price)) {
     throw Object.assign(new Error("Enter a valid price with up to two decimal places"), { status: 400 });
   }
-  const [whole, fraction = ""] = price.split(".");
+  const [whole = "0", fraction = ""] = price.split(".");
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   if (!Number.isSafeInteger(cents) || cents < 1 || cents > 1_000_000) {
     throw Object.assign(new Error("Price must be between $0.01 and $10,000.00"), { status: 400 });
@@ -236,7 +236,7 @@ function getDashboard() {
       COALESCE(SUM(CASE WHEN status IN ('Ready', 'Completed') THEN total_cents ELSE 0 END), 0) AS revenue_cents,
       SUM(CASE WHEN status NOT IN ('Completed', 'Cancelled') THEN 1 ELSE 0 END) AS active_orders,
       COUNT(*) AS order_count,
-      COALESCE(AVG(total_cents), 0) AS average_cents
+      COALESCE(AVG(CASE WHEN status IN ('Ready', 'Completed') THEN total_cents END), 0) AS average_cents
     FROM orders WHERE created_at >= ? AND created_at < ?
   `).get(today, tomorrow);
   const firstSalesDate = localDate(-6);
@@ -471,13 +471,16 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && restockMatch) {
     const body = await readBody(request);
     const quantity = body.quantity;
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000) {
-      throw Object.assign(new Error("Restock quantity must be a whole number between 1 and 10,000"), { status: 400 });
+    if (!Number.isInteger(quantity) || quantity < 0 || quantity > 10_000) {
+      throw Object.assign(new Error("Quantity must be a whole number between 0 and 10,000"), { status: 400 });
     }
     const reorderLevel = body.reorderLevel === undefined || body.reorderLevel === null || body.reorderLevel === ""
       ? null : body.reorderLevel;
     if (reorderLevel !== null && (!Number.isInteger(reorderLevel) || reorderLevel < 0 || reorderLevel > 1_000_000)) {
       throw Object.assign(new Error("Reorder level must be a whole number between 0 and 1,000,000"), { status: 400 });
+    }
+    if (quantity === 0 && reorderLevel === null) {
+      throw Object.assign(new Error("Enter a restock quantity or a new reorder point"), { status: 400 });
     }
     const item = db.prepare("SELECT id, name, quantity, unit FROM inventory WHERE id = ?").get(Number(restockMatch[1]));
     if (!item) throw Object.assign(new Error("Inventory item not found"), { status: 404 });

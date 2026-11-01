@@ -134,6 +134,16 @@ test("supports menu creation, inventory restocking, and method errors", async ()
   assert.equal(restocked.response.status, 200);
   assert.equal(restocked.body.quantity, item.quantity + 3);
   assert.equal(restocked.body.reorder_level, 7);
+  const thresholdOnly = await request(`/api/inventory/${item.id}/restock`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quantity: 0, reorderLevel: 9 }),
+  });
+  assert.equal(thresholdOnly.response.status, 200);
+  assert.equal(thresholdOnly.body.quantity, item.quantity + 3);
+  assert.equal(thresholdOnly.body.reorder_level, 9);
+  const emptyUpdate = await request(`/api/inventory/${item.id}/restock`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quantity: 0 }),
+  });
+  assert.equal(emptyUpdate.response.status, 400);
 
   const wrongMethod = await request("/api/dashboard", { method: "POST" });
   assert.equal(wrongMethod.response.status, 405);
