@@ -143,6 +143,7 @@
                 <label class="filter-label"><span>Show</span><select id="order-filter" aria-label="Filter by status"><option>All</option><option>Received</option><option>Preparing</option><option>Ready</option><option>Completed</option><option>Cancelled</option></select></label>
               </div>
               <div class="table-scroll"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>ITEMS</th><th>TIME</th><th>STATUS</th><th class="align-right">TOTAL</th><th></th></tr></thead><tbody id="orders-table"></tbody></table></div>
+              <div class="pagination" id="orders-pagination" aria-label="Orders pages"></div>
               <div class="panel-empty" id="orders-empty" hidden>No orders match your search yet.</div>
             </article>
             <footer class="page-footer"><span>© <span class="footer-year"></span> mhru cafe</span><span><span class="live-dot"></span> All systems operational</span></footer>
@@ -212,6 +213,7 @@
         <div class="dialog-heading"><div><p class="eyebrow">KEEP THE GOOD STUFF COMING</p><h2>Restock inventory</h2><p>Add incoming stock to your on-hand count.</p></div><button class="dialog-close" type="button" data-close-dialog="restock-dialog" aria-label="Close dialog">×</button></div>
         <label class="form-field"><span>Inventory item</span><select id="restock-item" name="inventoryId" required></select></label>
         <label class="form-field"><span>Quantity received</span><input name="quantity" type="number" min="1" max="10000" step="1" placeholder="e.g. 12" required></label>
+        <label class="form-field"><span>Reorder point <em>optional</em></span><input id="restock-reorder-level" name="reorderLevel" type="number" min="0" max="1000000" step="1" placeholder="Leave blank to keep current"></label>
         <div class="form-error" id="restock-error" role="alert"></div>
         <div class="dialog-actions"><button class="button button-quiet" type="button" data-close-dialog="restock-dialog">Cancel</button><button class="button button-primary" type="submit">Update stock <svg><use href="#icon-arrow"/></svg></button></div>
       </form>

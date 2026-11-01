@@ -189,6 +189,9 @@ tbody tr:last-child td { border-bottom: 0; }
 .filter-label { display: flex; align-items: center; gap: 8px; color: #89948d; font-size: 9px; }
 .filter-label select { min-width: 105px; height: 33px; padding: 0 25px 0 9px; border: 1px solid #e8ece8; border-radius: 6px; outline: 0; background: #fff; color: #516157; font-size: 9px; }
 .panel-empty { padding: 26px; color: #929d95; text-align: center; font-size: 10px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 3px; color: #89948d; font-size: 9px; }
+.pagination button { min-height: 30px; padding: 0 10px; border: 1px solid #e8ede8; border-radius: 5px; background: #fff; color: #52725d; font: inherit; }
+.pagination button:disabled { cursor: default; opacity: .45; }
 .table-count { color: #939d96; font-size: 9px; }
 .inventory-panel .panel-heading { align-items: center; padding: 16px 0 13px; }
 .inventory-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin-bottom: 15px; }
@@ -215,6 +218,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .menu-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 16px; }
 .menu-card-footer strong { color: #34493b; font: 700 13px "Manrope", sans-serif; }
 .menu-card-footer span { color: #929e96; font-size: 8px; }
+.menu-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .mini-clock { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vertical-align: -1px; }
 
 .app-dialog { width: min(520px, calc(100vw - 32px)); max-height: min(90vh, 760px); overflow: auto; padding: 24px; border: 1px solid #e9ede9; border-radius: 13px; background: #fff; color: var(--ink); box-shadow: 0 24px 80px rgb(17 35 24 / 22%); }

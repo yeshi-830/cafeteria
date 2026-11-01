@@ -4,6 +4,7 @@ const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || "127.0.0.1";
 const publicDirectory = path.join(__dirname, "public");
 const databasePath = process.env.CAFETERIA_DB_PATH || path.join(__dirname, "cafeteria.db");
 const db = new DatabaseSync(databasePath);
@@ -53,6 +54,7 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
   CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_orders_status_created_at ON orders(status, created_at);
   CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
   CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 `);
@@ -169,6 +171,9 @@ function sendJson(response, status, payload) {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
   });
   response.end(JSON.stringify(payload));
 }
@@ -176,14 +181,18 @@ function sendJson(response, status, payload) {
 function readBody(request) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let byteLength = 0;
+    let tooLarge = false;
     request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 1_000_000) {
-        reject(Object.assign(new Error("Request body is too large"), { status: 413 }));
-        request.destroy();
-      }
+      byteLength += chunk.length;
+      if (byteLength > 1_000_000) tooLarge = true;
+      else if (!tooLarge) body += chunk.toString("utf8");
     });
     request.on("end", () => {
+      if (tooLarge) {
+        reject(Object.assign(new Error("Request body is too large"), { status: 413 }));
+        return;
+      }
       try {
         const parsed = body ? JSON.parse(body) : {};
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -206,30 +215,48 @@ function requireText(value, label, maxLength = 100) {
   return value.trim();
 }
 
+function requirePriceCents(value) {
+  const price = typeof value === "number" ? String(value) : value;
+  if (typeof price !== "string" || !/^\d+(?:\.\d{1,2})?$/.test(price)) {
+    throw Object.assign(new Error("Enter a valid price with up to two decimal places"), { status: 400 });
+  }
+  const [whole, fraction = ""] = price.split(".");
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  if (!Number.isSafeInteger(cents) || cents < 1 || cents > 1_000_000) {
+    throw Object.assign(new Error("Price must be between $0.01 and $10,000.00"), { status: 400 });
+  }
+  return cents;
+}
+
 function getDashboard() {
   const today = localDate();
+  const tomorrow = localDate(1);
   const stats = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN status IN ('Ready', 'Completed') THEN total_cents ELSE 0 END), 0) AS revenue_cents,
       SUM(CASE WHEN status NOT IN ('Completed', 'Cancelled') THEN 1 ELSE 0 END) AS active_orders,
       COUNT(*) AS order_count,
       COALESCE(AVG(total_cents), 0) AS average_cents
-    FROM orders WHERE substr(created_at, 1, 10) = ?
-  `).get(today);
+    FROM orders WHERE created_at >= ? AND created_at < ?
+  `).get(today, tomorrow);
+  const firstSalesDate = localDate(-6);
+  const dailySales = db.prepare(`
+    SELECT substr(created_at, 1, 10) AS date, COALESCE(SUM(total_cents), 0) AS revenue_cents
+    FROM orders WHERE created_at >= ? AND created_at < ? AND status IN ('Ready', 'Completed')
+    GROUP BY substr(created_at, 1, 10)
+  `).all(firstSalesDate, tomorrow);
+  const salesByDate = new Map(dailySales.map((day) => [day.date, day.revenue_cents]));
   const weeklySales = Array.from({ length: 7 }, (_, index) => {
     const date = localDate(index - 6);
-    const result = db.prepare(`
-      SELECT COALESCE(SUM(total_cents), 0) AS revenue_cents
-      FROM orders WHERE substr(created_at, 1, 10) = ? AND status != 'Cancelled'
-    `).get(date);
-    return { date, revenueCents: result.revenue_cents };
+    return { date, revenueCents: salesByDate.get(date) || 0 };
   });
   const orders = db.prepare(`${orderSelect} GROUP BY o.id ORDER BY o.created_at DESC, o.id DESC LIMIT 6`).all();
   const popular = db.prepare(`
     SELECT m.id, m.name, m.category, m.price_cents, COALESCE(SUM(oi.quantity), 0) AS sold
     FROM menu_items m LEFT JOIN order_items oi ON oi.menu_item_id = m.id
+      AND EXISTS (SELECT 1 FROM orders o WHERE o.id = oi.order_id AND o.created_at >= ? AND o.created_at < ? AND o.status IN ('Ready', 'Completed'))
     GROUP BY m.id ORDER BY sold DESC, m.name LIMIT 4
-  `).all();
+  `).all(firstSalesDate, tomorrow);
   const inventory = db.prepare("SELECT COUNT(*) AS count FROM inventory WHERE quantity <= reorder_level").get();
   const activities = db.prepare("SELECT id, message, kind, created_at FROM activity_log ORDER BY created_at DESC, id DESC LIMIT 5").all();
   return {
@@ -248,7 +275,14 @@ function getDashboard() {
 }
 
 function serveStatic(response, pathname) {
-  const requestedPath = pathname === "/" ? "/index.html" : decodeURIComponent(pathname);
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    sendJson(response, 400, { error: "Invalid URL path" });
+    return;
+  }
+  const requestedPath = decodedPath === "/" ? "/index.html" : decodedPath;
   const filePath = path.resolve(publicDirectory, `.${requestedPath}`);
   if (!filePath.startsWith(`${publicDirectory}${path.sep}`)) {
     sendJson(response, 403, { error: "Forbidden" });
@@ -269,9 +303,12 @@ function serveStatic(response, pathname) {
     response.writeHead(200, {
       "Content-Type": types[extension] || "application/octet-stream",
       "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
       "Cache-Control": "no-cache",
     });
-    response.end(contents);
+    response.end(response.req?.method === "HEAD" ? undefined : contents);
   });
 }
 
@@ -299,7 +336,22 @@ async function handleApi(request, response, url) {
       values.push(status);
     }
     const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-    sendJson(response, 200, db.prepare(`${orderSelect} ${where} GROUP BY o.id ORDER BY o.created_at DESC, o.id DESC`).all(...values));
+    const isPaginatedRequest = url.searchParams.has("page") || url.searchParams.has("pageSize");
+    const selectOrders = `${orderSelect} ${where} GROUP BY o.id ORDER BY o.created_at DESC, o.id DESC`;
+    if (!isPaginatedRequest) {
+      sendJson(response, 200, db.prepare(selectOrders).all(...values));
+      return;
+    }
+    const page = Number(url.searchParams.get("page") || 1);
+    const pageSize = Number(url.searchParams.get("pageSize") || 25);
+    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      sendJson(response, 400, { error: "Page must be positive and page size must be between 1 and 100" });
+      return;
+    }
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM orders o ${where}`).get(...values).count;
+    const items = db.prepare(`${selectOrders} LIMIT ? OFFSET ?`)
+      .all(...values, pageSize, (page - 1) * pageSize);
+    sendJson(response, 200, { items, total, page, pageSize });
     return;
   }
   if (request.method === "POST" && route === "/api/orders") {
@@ -374,9 +426,9 @@ async function handleApi(request, response, url) {
     const name = requireText(body.name, "Item name");
     const category = requireText(body.category, "Category", 50);
     const description = typeof body.description === "string" ? body.description.trim().slice(0, 250) : "";
-    const priceCents = Math.round(Number(body.price) * 100);
+    const priceCents = requirePriceCents(body.price);
     const prepMinutes = Number(body.prepMinutes);
-    if (!Number.isFinite(priceCents) || priceCents < 1 || priceCents > 1_000_000 || !Number.isInteger(prepMinutes) || prepMinutes < 1 || prepMinutes > 240) {
+    if (!Number.isInteger(prepMinutes) || prepMinutes < 1 || prepMinutes > 240) {
       throw Object.assign(new Error("Enter a valid price and preparation time"), { status: 400 });
     }
     const result = db.prepare(
@@ -384,6 +436,31 @@ async function handleApi(request, response, url) {
     ).run(name, category, description, priceCents, prepMinutes);
     const item = db.prepare("SELECT id, name, category, description, price_cents, prep_minutes, available FROM menu_items WHERE id = ?").get(Number(result.lastInsertRowid));
     sendJson(response, 201, item);
+    return;
+  }
+  const menuMatch = route.match(/^\/api\/menu\/(\d+)$/);
+  if (request.method === "PATCH" && menuMatch) {
+    const body = await readBody(request);
+    const id = Number(menuMatch[1]);
+    const current = db.prepare("SELECT id, name, category, description, price_cents, prep_minutes, available FROM menu_items WHERE id = ?").get(id);
+    if (!current) throw Object.assign(new Error("Menu item not found"), { status: 404 });
+    if (Object.hasOwn(body, "available")) {
+      if (typeof body.available !== "boolean") throw Object.assign(new Error("Availability must be true or false"), { status: 400 });
+      db.prepare("UPDATE menu_items SET available = ? WHERE id = ?").run(Number(body.available), id);
+    } else {
+      const name = requireText(body.name, "Item name");
+      const category = requireText(body.category, "Category", 50);
+      const description = typeof body.description === "string" ? body.description.trim().slice(0, 250) : "";
+      const priceCents = requirePriceCents(body.price);
+      const prepMinutes = Number(body.prepMinutes);
+      if (!Number.isInteger(prepMinutes) || prepMinutes < 1 || prepMinutes > 240) {
+        throw Object.assign(new Error("Enter a valid price and preparation time"), { status: 400 });
+      }
+      db.prepare("UPDATE menu_items SET name = ?, category = ?, description = ?, price_cents = ?, prep_minutes = ? WHERE id = ?")
+        .run(name, category, description, priceCents, prepMinutes, id);
+    }
+    const item = db.prepare("SELECT id, name, category, description, price_cents, prep_minutes, available FROM menu_items WHERE id = ?").get(id);
+    sendJson(response, 200, item);
     return;
   }
   if (request.method === "GET" && route === "/api/inventory") {
@@ -397,10 +474,18 @@ async function handleApi(request, response, url) {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000) {
       throw Object.assign(new Error("Restock quantity must be a whole number between 1 and 10,000"), { status: 400 });
     }
+    const reorderLevel = body.reorderLevel === undefined || body.reorderLevel === null || body.reorderLevel === ""
+      ? null : body.reorderLevel;
+    if (reorderLevel !== null && (!Number.isInteger(reorderLevel) || reorderLevel < 0 || reorderLevel > 1_000_000)) {
+      throw Object.assign(new Error("Reorder level must be a whole number between 0 and 1,000,000"), { status: 400 });
+    }
     const item = db.prepare("SELECT id, name, quantity, unit FROM inventory WHERE id = ?").get(Number(restockMatch[1]));
     if (!item) throw Object.assign(new Error("Inventory item not found"), { status: 404 });
-    db.prepare("UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(quantity, item.id);
-    db.prepare("INSERT INTO activity_log (message, kind, created_at) VALUES (?, 'inventory', ?)").run(`${item.name} restocked with ${quantity} ${item.unit}`, localTimestamp());
+    if (item.quantity + quantity > 1_000_000_000) throw Object.assign(new Error("The resulting quantity is too large"), { status: 400 });
+    db.prepare("UPDATE inventory SET quantity = quantity + ?, reorder_level = COALESCE(?, reorder_level), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(quantity, reorderLevel, item.id);
+    const note = reorderLevel === null ? "" : `; reorder point set to ${reorderLevel} ${item.unit}`;
+    db.prepare("INSERT INTO activity_log (message, kind, created_at) VALUES (?, 'inventory', ?)").run(`${item.name} restocked with ${quantity} ${item.unit}${note}`, localTimestamp());
     sendJson(response, 200, db.prepare("SELECT id, name, category, quantity, unit, reorder_level, updated_at FROM inventory WHERE id = ?").get(item.id));
     return;
   }
@@ -408,8 +493,23 @@ async function handleApi(request, response, url) {
 }
 
 const server = http.createServer(async (request, response) => {
-  const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+  let url;
+  try {
+    url = new URL(request.url, "http://localhost");
+  } catch {
+    sendJson(response, 400, { error: "Invalid request URL" });
+    return;
+  }
   if (url.pathname.startsWith("/api/")) {
+    const supportedMethod = (url.pathname === "/api/dashboard" || url.pathname === "/api/orders" || url.pathname === "/api/menu" || url.pathname === "/api/inventory")
+      ? ["GET", ...(url.pathname === "/api/orders" || url.pathname === "/api/menu" ? ["POST"] : [])]
+      : /^\/api\/orders\/\d+\/status$/.test(url.pathname) ? ["PATCH"]
+        : /^\/api\/menu\/\d+$/.test(url.pathname) ? ["PATCH"]
+        : /^\/api\/inventory\/\d+\/restock$/.test(url.pathname) ? ["POST"] : null;
+    if (supportedMethod && !supportedMethod.includes(request.method)) {
+      sendJson(response, 405, { error: "Method not allowed" });
+      return;
+    }
     try {
       await handleApi(request, response, url);
     } catch (error) {
@@ -426,8 +526,8 @@ const server = http.createServer(async (request, response) => {
   serveStatic(response, url.pathname);
 });
 
-server.listen(port, () => {
-  console.log(`mhru cafe is running at http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`mhru cafe is running at http://${host}:${server.address().port}`);
   console.log(`SQLite database: ${databasePath}`);
 });
 

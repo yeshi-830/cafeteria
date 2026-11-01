@@ -3,6 +3,8 @@ const state = {
   inventory: [],
   currentView: "dashboard",
   searchTimer: null,
+  ordersPage: 1,
+  ordersRequest: 0,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -161,15 +163,21 @@ async function loadDashboard() {
 }
 
 async function loadOrders() {
+  const requestId = ++state.ordersRequest;
   try {
     const params = new URLSearchParams();
     const search = $("#order-search").value.trim();
     const status = $("#order-filter").value;
     if (search) params.set("q", search);
     if (status !== "All") params.set("status", status);
-    const rows = await api(`/api/orders?${params}`);
-    $("#orders-table").innerHTML = rows.map((order) => orderRow(order, true)).join("");
-    $("#orders-empty").hidden = rows.length > 0;
+    params.set("page", state.ordersPage);
+    params.set("pageSize", "25");
+    const result = await api(`/api/orders?${params}`);
+    if (requestId !== state.ordersRequest) return;
+    $("#orders-table").innerHTML = result.items.map((order) => orderRow(order, true)).join("");
+    $("#orders-empty").hidden = result.total > 0;
+    const pages = Math.max(1, Math.ceil(result.total / result.pageSize));
+    $("#orders-pagination").innerHTML = `<span>Showing ${result.total ? (result.page - 1) * result.pageSize + 1 : 0}–${Math.min(result.page * result.pageSize, result.total)} of ${result.total}</span><span><button type="button" data-orders-page="${result.page - 1}" ${result.page <= 1 ? "disabled" : ""}>Previous</button> <button type="button" data-orders-page="${result.page + 1}" ${result.page >= pages ? "disabled" : ""}>Next</button></span>`;
   } catch (error) {
     toast(error.message, true);
   }
@@ -184,6 +192,7 @@ async function loadMenu() {
       <div class="menu-card-top"><span class="menu-category">${escapeHtml(item.category)}</span><span class="availability${item.available ? "" : " unavailable"}">${item.available ? "Available" : "Unavailable"}</span></div>
       <h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description || "A little something delicious from our kitchen.")}</p>
       <div class="menu-card-footer"><strong>${money(item.price_cents)}</strong><span><svg class="mini-clock"><use href="#icon-clock"/></svg> ${Number(item.prep_minutes)} min prep</span></div>
+      <div class="menu-card-actions"><button class="row-action" type="button" data-menu-edit="${item.id}">Edit</button><button class="row-action" type="button" data-menu-toggle="${item.id}" data-available="${item.available ? "true" : "false"}">${item.available ? "Mark unavailable" : "Mark available"}</button></div>
     </article>`).join("");
   } catch (error) {
     toast(error.message, true);
@@ -263,6 +272,8 @@ function openRestockDialog(itemId = "") {
   $("#restock-error").textContent = "";
   $("#restock-item").innerHTML = state.inventory.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} · ${Number(item.quantity)} ${escapeHtml(item.unit)} on hand</option>`).join("");
   if (itemId) $("#restock-item").value = itemId;
+  const selectedItem = state.inventory.find((item) => item.id === Number($("#restock-item").value));
+  $("#restock-reorder-level").value = selectedItem?.reorder_level ?? "";
   $("#restock-dialog").showModal();
 }
 
@@ -281,10 +292,53 @@ document.addEventListener("click", async (event) => {
     if (actionButton.dataset.action === "new-order") await openOrderDialog();
     if (actionButton.dataset.action === "new-menu-item") {
       $("#menu-form").reset();
+      delete $("#menu-form").dataset.editingId;
       $("#menu-error").textContent = "";
+      $("#menu-dialog h2").textContent = "Add a menu item";
+      $("#menu-dialog .dialog-heading p:not(.eyebrow)").textContent = "Make something delicious part of the lineup.";
+      $('button[type="submit"]', $("#menu-form")).textContent = "Add to menu";
       $("#menu-dialog").showModal();
     }
     if (actionButton.dataset.action === "restock") openRestockDialog();
+    return;
+  }
+  const pageButton = event.target.closest("[data-orders-page]");
+  if (pageButton && !pageButton.disabled) {
+    state.ordersPage = Number(pageButton.dataset.ordersPage);
+    await loadOrders();
+    return;
+  }
+  const editMenuButton = event.target.closest("[data-menu-edit]");
+  if (editMenuButton) {
+    const item = state.menu.find((entry) => entry.id === Number(editMenuButton.dataset.menuEdit));
+    if (!item) return;
+    const form = $("#menu-form");
+    form.dataset.editingId = item.id;
+    form.elements.name.value = item.name;
+    form.elements.category.value = item.category;
+    form.elements.price.value = (item.price_cents / 100).toFixed(2);
+    form.elements.prepMinutes.value = item.prep_minutes;
+    form.elements.description.value = item.description;
+    $("#menu-error").textContent = "";
+    $("#menu-dialog h2").textContent = "Edit menu item";
+    $("#menu-dialog .dialog-heading p:not(.eyebrow)").textContent = "Update the details your team uses to serve it.";
+    $('button[type="submit"]', form).textContent = "Save changes";
+    $("#menu-dialog").showModal();
+    return;
+  }
+  const toggleMenuButton = event.target.closest("[data-menu-toggle]");
+  if (toggleMenuButton) {
+    toggleMenuButton.disabled = true;
+    try {
+      await api(`/api/menu/${toggleMenuButton.dataset.menuToggle}`, {
+        method: "PATCH", body: JSON.stringify({ available: toggleMenuButton.dataset.available !== "true" }),
+      });
+      await Promise.all([loadMenu(), loadDashboard()]);
+      toast("Menu availability updated.");
+    } catch (error) {
+      toggleMenuButton.disabled = false;
+      toast(error.message, true);
+    }
     return;
   }
   const closeButton = event.target.closest("[data-close-dialog]");
@@ -329,12 +383,17 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.matches("#order-filter")) loadOrders();
+  if (event.target.matches("#order-filter")) { state.ordersPage = 1; loadOrders(); }
+  if (event.target.matches("#restock-item")) {
+    const item = state.inventory.find((entry) => entry.id === Number(event.target.value));
+    $("#restock-reorder-level").value = item?.reorder_level ?? "";
+  }
   if (event.target.matches(".order-line select, .order-line input")) updateOrderTotal();
 });
 
 document.addEventListener("input", (event) => {
   if (event.target.matches("#order-search")) {
+    state.ordersPage = 1;
     window.clearTimeout(state.searchTimer);
     state.searchTimer = window.setTimeout(loadOrders, 180);
   }
@@ -384,9 +443,11 @@ $("#menu-form").addEventListener("submit", async (event) => {
   const submit = $('button[type="submit"]', event.currentTarget);
   submit.disabled = true;
   try {
-    await api("/api/menu", { method: "POST", body: JSON.stringify(data) });
+    const editingId = event.currentTarget.dataset.editingId;
+    await api(editingId ? `/api/menu/${editingId}` : "/api/menu", { method: editingId ? "PATCH" : "POST", body: JSON.stringify(data) });
     $("#menu-dialog").close();
-    toast("Your new menu item is ready to go.");
+    delete event.currentTarget.dataset.editingId;
+    toast(editingId ? "Menu item updated." : "Your new menu item is ready to go.");
     await Promise.all([loadMenu(), loadDashboard()]);
   } catch (error) {
     showError($("#menu-error"), error);
@@ -403,7 +464,10 @@ $("#restock-form").addEventListener("submit", async (event) => {
   try {
     await api(`/api/inventory/${form.get("inventoryId")}/restock`, {
       method: "POST",
-      body: JSON.stringify({ quantity: Number(form.get("quantity")) }),
+      body: JSON.stringify({
+        quantity: Number(form.get("quantity")),
+        reorderLevel: form.get("reorderLevel") === "" ? null : Number(form.get("reorderLevel")),
+      }),
     });
     $("#restock-dialog").close();
     toast("Inventory updated. Nice and stocked.");

@@ -1,0 +1,160 @@
+const assert = require("node:assert/strict");
+const { spawn } = require("node:child_process");
+const { once } = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const net = require("node:net");
+const { after, before, test } = require("node:test");
+
+const project = path.resolve(__dirname, "..");
+let serverProcess;
+let baseUrl;
+let tempDirectory;
+
+async function availablePort() {
+  const socket = net.createServer();
+  socket.listen(0, "127.0.0.1");
+  await once(socket, "listening");
+  const { port } = socket.address();
+  await new Promise((resolve, reject) => socket.close((error) => error ? reject(error) : resolve()));
+  return port;
+}
+
+async function request(route, options) {
+  const response = await fetch(`${baseUrl}${route}`, options);
+  const body = await response.json();
+  return { response, body };
+}
+
+before(async () => {
+  tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "cafeteria-tests-"));
+  const port = await availablePort();
+  baseUrl = `http://127.0.0.1:${port}`;
+  serverProcess = spawn(process.execPath, [path.join(project, "server.js")], {
+    cwd: project,
+    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", CAFETERIA_DB_PATH: path.join(tempDirectory, "test.db") },
+    stdio: "ignore",
+  });
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (serverProcess.exitCode !== null) throw new Error(`Server exited with ${serverProcess.exitCode}`);
+    try {
+      const response = await fetch(`${baseUrl}/api/menu`);
+      if (response.ok) return;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Server did not become ready");
+});
+
+after(async () => {
+  if (serverProcess && serverProcess.exitCode === null) {
+    serverProcess.kill();
+    await once(serverProcess, "exit");
+  }
+  if (tempDirectory) fs.rmSync(tempDirectory, { recursive: true, force: true });
+});
+
+test("serves the dashboard with security headers and rejects malformed paths", async () => {
+  const page = await fetch(baseUrl);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(page.headers.get("x-frame-options"), "DENY");
+  const malformed = await fetch(`${baseUrl}/%zz`);
+  assert.equal(malformed.status, 400);
+  const traversal = await fetch(`${baseUrl}/..%2fserver.js`);
+  assert.equal(traversal.status, 403);
+});
+
+test("validates and persists menu items and orders, then progresses order status", async () => {
+  const menus = await request("/api/menu");
+  const menu = menus.body[0];
+  const badOrder = await request("/api/orders", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ customerName: "No item", items: [] }),
+  });
+  assert.equal(badOrder.response.status, 400);
+
+  const created = await request("/api/orders", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ customerName: "Test Guest", tableNumber: "08", items: [{ menuItemId: menu.id, quantity: 2 }] }),
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.total_cents, menu.price_cents * 2);
+  assert.equal(created.body.status, "Received");
+  const beforeReady = await request("/api/dashboard");
+  const revenueBeforeReady = beforeReady.body.weeklySales.reduce((sum, day) => sum + day.revenueCents, 0);
+
+  const preparing = await request(`/api/orders/${created.body.id}/status`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "Preparing" }),
+  });
+  assert.equal(preparing.response.status, 200);
+  const ready = await request(`/api/orders/${created.body.id}/status`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "Ready" }),
+  });
+  assert.equal(ready.response.status, 200);
+  const afterReady = await request("/api/dashboard");
+  assert.equal(afterReady.body.weeklySales.reduce((sum, day) => sum + day.revenueCents, 0), revenueBeforeReady + created.body.total_cents);
+  const invalidTransition = await request(`/api/orders/${created.body.id}/status`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "Preparing" }),
+  });
+  assert.equal(invalidTransition.response.status, 400);
+});
+
+test("supports menu creation, inventory restocking, and method errors", async () => {
+  const invalidPrice = await request("/api/menu", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Bad price", category: "Test", price: "4.256", prepMinutes: "5" }),
+  });
+  assert.equal(invalidPrice.response.status, 400);
+
+  const createdMenu = await request("/api/menu", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Test Special", category: "Test", price: "4.25", prepMinutes: "5", description: "Seasonal" }),
+  });
+  assert.equal(createdMenu.response.status, 201);
+  assert.equal(createdMenu.body.price_cents, 425);
+
+  const editedMenu = await request(`/api/menu/${createdMenu.body.id}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Test Special Updated", category: "Test", price: "4.50", prepMinutes: "6", description: "Updated" }),
+  });
+  assert.equal(editedMenu.response.status, 200);
+  assert.equal(editedMenu.body.price_cents, 450);
+  const unavailableMenu = await request(`/api/menu/${createdMenu.body.id}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ available: false }),
+  });
+  assert.equal(unavailableMenu.body.available, 0);
+
+  const inventory = await request("/api/inventory");
+  const item = inventory.body[0];
+  const restocked = await request(`/api/inventory/${item.id}/restock`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quantity: 3, reorderLevel: 7 }),
+  });
+  assert.equal(restocked.response.status, 200);
+  assert.equal(restocked.body.quantity, item.quantity + 3);
+  assert.equal(restocked.body.reorder_level, 7);
+
+  const wrongMethod = await request("/api/dashboard", { method: "POST" });
+  assert.equal(wrongMethod.response.status, 405);
+});
+
+test("dashboard revenue and popular items include only ready or completed orders in the last week", async () => {
+  const dashboard = await request("/api/dashboard");
+  assert.equal(dashboard.body.weeklySales.length, 7);
+  assert.ok(dashboard.body.weeklySales.every((day) => Number.isInteger(day.revenueCents)));
+  assert.ok(dashboard.body.popular.every((item) => Number.isInteger(item.sold)));
+});
+
+test("orders endpoint returns bounded, searchable pagination metadata", async () => {
+  const legacy = await request("/api/orders");
+  assert.ok(Array.isArray(legacy.body));
+  const firstPage = await request("/api/orders?page=1&pageSize=2");
+  assert.equal(firstPage.response.status, 200);
+  assert.equal(firstPage.body.page, 1);
+  assert.equal(firstPage.body.pageSize, 2);
+  assert.ok(firstPage.body.total >= firstPage.body.items.length);
+  assert.ok(firstPage.body.items.length <= 2);
+  const invalidPageSize = await request("/api/orders?pageSize=101");
+  assert.equal(invalidPageSize.response.status, 400);
+});
