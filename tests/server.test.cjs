@@ -156,6 +156,12 @@ test("requires a session and restricts manager operations to their role", async 
     body: JSON.stringify({ username: "test-admin", password: "test-admin-password-123" }),
   });
   assert.equal(originAttack.status, 403);
+  const allowedOriginLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: new URL(baseUrl).origin },
+    body: JSON.stringify({ username: "test-admin", password: "test-admin-password-123" }),
+  });
+  assert.equal(allowedOriginLogin.status, 200);
 
   const created = await request("/api/staff", {
     method: "POST",
@@ -218,6 +224,8 @@ test("requires a session and restricts manager operations to their role", async 
     body: JSON.stringify({ active: false }),
   });
   assert.equal(deactivated.response.status, 200);
+  const revokedManagerSession = await fetch(`${baseUrl}/api/dashboard`, { headers: { cookie: managerCookie } });
+  assert.equal(revokedManagerSession.status, 401);
   const inactiveLogin = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
