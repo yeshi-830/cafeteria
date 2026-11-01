@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 
 const frontendRoot = fileURLToPath(new URL(".", import.meta.url));
+const apiTarget = process.env.CAFETERIA_API_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
 
 export default defineConfig({
   root: frontendRoot,
@@ -10,7 +11,8 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
-    proxy: { "/api": "http://127.0.0.1:3000" },
+    strictPort: true,
+    proxy: { "/api": { target: apiTarget } },
   },
   build: { outDir: "dist", emptyOutDir: true },
 });

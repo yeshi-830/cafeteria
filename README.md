@@ -49,6 +49,8 @@ The initial credentials are required only when the database has no users. Passwo
 
 The first authenticated startup applies an additive, transactional schema migration for users and sessions. Existing menu, inventory, order, and activity records are not altered. Back up `cafeteria.db` before deployments as a general operational precaution.
 
+If sign-in reports that the API route was not found or the backend is out of date, the browser may be connected to an older server already using port 3000. Stop only the old cafeteria server process, then restart `npm run dev` from the project root. The Vite development server now fails clearly if port 5173 is occupied instead of silently switching to a different port, and its API proxy follows `PORT` or `CAFETERIA_API_URL`.
+
 Keep the server on loopback unless remote access is intentionally configured. Network binding requires `COOKIE_SECURE=true` and an explicit comma-separated `TRUSTED_ORIGINS` allowlist, for example `https://cafe.example.com`. Terminate HTTPS at a trusted reverse proxy; the built-in server does not provide TLS. Do not expose the app publicly until the reverse proxy, firewall, backups, and credential handling are configured.
 
 ## Included workflows

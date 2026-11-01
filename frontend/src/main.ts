@@ -56,7 +56,10 @@ async function api<T = any>(url: string, options: RequestInit = {}): Promise<T> 
     throw new Error("The server returned an unexpected response");
   }
   if (!response.ok) {
-    const error = Object.assign(new Error(payload.error || `Request failed (${response.status})`), { status: response.status });
+    const message = payload.error === "API route not found" && url.startsWith("/api/auth/")
+      ? "The connected backend is out of date and does not support sign-in. Stop the old server on port 3000, then restart this project with npm run dev."
+      : payload.error || `Request failed (${response.status})`;
+    const error = Object.assign(new Error(message), { status: response.status });
     if (response.status === 401 && url !== "/api/auth/login" && url !== "/api/auth/me") showLogin();
     throw error;
   }
