@@ -80,6 +80,16 @@ function updateNotificationIndicator() {
   $("#notification-dot").hidden = !hasLowStock && !hasOpenOrders;
 }
 
+function updateFeatureHighlights(revenueCents = state.recentOrders.reduce((sum, order) => sum + order.total_cents, 0)) {
+  const openOrders = state.recentOrders.filter((order) => !["Completed", "Cancelled"].includes(order.status)).length;
+  const menuAvailable = state.menu.filter((item) => item.available).length;
+  const lowStock = state.inventory.filter((item) => item.quantity <= item.reorder_level).length;
+  $("#feature-open-orders").textContent = String(openOrders);
+  $("#feature-menu-count").textContent = String(menuAvailable);
+  $("#feature-stock-count").textContent = String(lowStock);
+  $("#feature-revenue-highlight").textContent = money(revenueCents);
+}
+
 async function showApp(user: User) {
   state.user = user;
   $("#profile-name").textContent = user.displayName;
@@ -258,6 +268,7 @@ async function loadDashboard() {
     renderPopular(data.popular);
     renderActivities(data.activities);
     state.recentOrders = data.orders;
+    updateFeatureHighlights(data.stats.revenueCents);
     updateNotificationIndicator();
     $("#recent-orders").innerHTML = data.orders.length
       ? data.orders.map((order) => orderRow(order)).join("")
@@ -299,6 +310,7 @@ async function loadMenu() {
       <div class="menu-card-footer"><strong>${money(item.price_cents)}</strong><span><svg class="mini-clock"><use href="#icon-clock"/></svg> ${Number(item.prep_minutes)} min prep</span></div>
       <div class="menu-card-actions"><button class="row-action" type="button" data-menu-edit="${item.id}">Edit</button><button class="row-action" type="button" data-menu-toggle="${item.id}" data-available="${item.available ? "true" : "false"}">${item.available ? "Mark unavailable" : "Mark available"}</button></div>
     </article>`).join("");
+    updateFeatureHighlights();
   } catch (error) {
     toast(error.message, true);
   }
@@ -316,6 +328,7 @@ async function loadInventory() {
       return `<tr><td class="customer-cell">${escapeHtml(item.name)}</td><td>${escapeHtml(item.category)}</td><td><strong class="quantity-cell">${Number(item.quantity)} ${escapeHtml(item.unit)}</strong></td><td>${Number(item.reorder_level)} ${escapeHtml(item.unit)}</td><td><span class="inventory-status${low ? " low" : ""}">${low ? "● Low stock" : "● In stock"}</span></td><td class="align-right"><button class="row-action" data-restock-id="${item.id}">Restock</button></td></tr>`;
     }).join("");
     $("#nav-stock-dot").hidden = lowItems.length === 0;
+    updateFeatureHighlights();
     updateNotificationIndicator();
   } catch (error) {
     toast(error.message, true);
