@@ -8,9 +8,12 @@ const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 const PASSWORD_BYTES = 64;
 const SESSION_COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 const localPort = Number(process.env.PORT || 3000);
+const frontendPort = Number(process.env.VITE_PORT || 5173);
 const defaultTrustedOrigins = [
   "http://127.0.0.1:5173",
   "http://localhost:5173",
+  `http://127.0.0.1:${frontendPort}`,
+  `http://localhost:${frontendPort}`,
   "http://127.0.0.1:3000",
   "http://localhost:3000",
   `http://127.0.0.1:${localPort}`,

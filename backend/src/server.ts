@@ -6,7 +6,13 @@ import { authenticateRequest, handleAuthRoute, initializeAuth, isTrustedOrigin }
 
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || "127.0.0.1";
-initializeAuth(host);
+try {
+  initializeAuth(host);
+} catch (error) {
+  db.close();
+  console.error("Authentication setup failed:", error.message);
+  process.exit(1);
+}
 const server = http.createServer(async (request: IncomingMessage, response: ServerResponse) => {
   let url: URL;
   try {
@@ -72,6 +78,17 @@ const server = http.createServer(async (request: IncomingMessage, response: Serv
     return;
   }
   serveStatic(response, url.pathname);
+});
+
+server.on("error", (error: NodeJS.ErrnoException) => {
+  db.close();
+  if (error.code === "EADDRINUSE") {
+    console.error(`Cannot start the cafeteria API: ${host}:${port} is already in use. Stop the old server or set PORT in .env, then restart both services.`);
+    process.exitCode = 1;
+    return;
+  }
+  console.error("The cafeteria API could not start:", error);
+  process.exitCode = 1;
 });
 
 server.listen(port, host, () => {

@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { once } = require("node:events");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -129,6 +129,24 @@ test("serves the dashboard with security headers and rejects malformed paths", a
   assert.equal(malformed.status, 400);
   const traversal = await fetch(`${baseUrl}/..%2fserver.js`);
   assert.equal(traversal.status, 403);
+});
+
+test("first startup explains how to configure the required admin account", () => {
+  const missingCredentialsDb = path.join(tempDirectory, "missing-admin-credentials.db");
+  const startup = spawnSync(process.execPath, [path.join(project, "dist", "backend", "src", "server.js")], {
+    cwd: project,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      HOST: "127.0.0.1",
+      PORT: "0",
+      CAFETERIA_DB_PATH: missingCredentialsDb,
+      CAFETERIA_ADMIN_USERNAME: "",
+      CAFETERIA_ADMIN_PASSWORD: "",
+    },
+  });
+  assert.equal(startup.status, 1);
+  assert.match(startup.stderr, /Authentication setup failed: Set CAFETERIA_ADMIN_USERNAME/);
 });
 
 test("adds authentication tables without replacing existing cafe records", async () => {

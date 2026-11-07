@@ -37,19 +37,19 @@ The production app is served from <http://127.0.0.1:3000>.
 
 SQLite uses `cafeteria.db` in the project root by default. Existing data is preserved. Sample menu, inventory, and order rows are only seeded when their respective tables are empty. Set `CAFETERIA_DB_PATH` to use another SQLite file, `PORT` to change the API port, or `HOST` to change the bind address.
 
-The server binds to loopback by default. On the first run, configure the initial administrator account in the same shell before starting the server:
+The server binds to loopback by default. On the first run, create a private `.env` file in the project root and configure the initial administrator account:
 
 ```powershell
-$env:CAFETERIA_ADMIN_USERNAME = "cafe-admin"
-$env:CAFETERIA_ADMIN_PASSWORD = "use-a-unique-password-of-at-least-12-characters"
+Copy-Item .env.example .env
+# Edit .env and set a unique administrator username and password (at least 12 characters).
 npm run dev
 ```
 
-The initial credentials are required only when the database has no users. Passwords are stored as salted scrypt hashes. Sign-in issues an eight-hour, database-backed session in an HTTP-only, SameSite=Strict cookie. Failed sign-ins are rate limited. Admins can create accounts and assign roles; managers can create staff accounts. Staff can process orders, while menu and inventory changes require a manager or admin.
+Keep `.env` private; it is ignored by Git. The credentials are required only when the database has no users. Passwords are stored as salted scrypt hashes. Sign-in issues an eight-hour, database-backed session in an HTTP-only, SameSite=Strict cookie. Failed sign-ins are rate limited. Admins can create accounts and assign roles; managers can create staff accounts. Staff can process orders, while menu and inventory changes require a manager or admin.
 
 The first authenticated startup applies an additive, transactional schema migration for users and sessions. Existing menu, inventory, order, and activity records are not altered. Back up `cafeteria.db` before deployments as a general operational precaution.
 
-If sign-in reports that the API route was not found or the backend is out of date, the browser may be connected to an older server already using port 3000. Stop only the old cafeteria server process, then restart `npm run dev` from the project root. The Vite development server now fails clearly if port 5173 is occupied instead of silently switching to a different port, and its API proxy follows `PORT` or `CAFETERIA_API_URL`.
+If startup reports that port 3000 or 5173 is already in use, close the existing cafeteria server/dev terminal before running another copy, or set unused `PORT` and `VITE_PORT` values in `.env`. The Vite proxy reads the same `.env`, so both services stay connected. The development server intentionally fails instead of silently switching to a port that could connect the frontend to the wrong backend. If the backend says to set `CAFETERIA_ADMIN_USERNAME`, edit `.env` and restart; do not reset or delete the database. The API proxy follows `PORT` or `CAFETERIA_API_URL`.
 
 Keep the server on loopback unless remote access is intentionally configured. Network binding requires `COOKIE_SECURE=true` and an explicit comma-separated `TRUSTED_ORIGINS` allowlist, for example `https://cafe.example.com`. Terminate HTTPS at a trusted reverse proxy; the built-in server does not provide TLS. Do not expose the app publicly until the reverse proxy, firewall, backups, and credential handling are configured.
 

@@ -6,13 +6,13 @@
   "description": "A full-stack cafeteria management dashboard backed by SQLite.",
   "scripts": {
     "dev": "concurrently -k -n backend,frontend \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "dev:backend": "tsx watch backend/src/server.ts",
+    "dev:backend": "node --env-file-if-exists=.env --import tsx --watch backend/src/server.ts",
     "dev:frontend": "vite --config frontend/vite.config.ts",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "tsc -p tsconfig.json",
     "typecheck:frontend": "tsc -p frontend/tsconfig.json",
     "build:frontend": "npm run typecheck:frontend && vite --config frontend/vite.config.ts build",
-    "start": "node dist/backend/src/server.js",
+    "start": "node --env-file-if-exists=.env dist/backend/src/server.js",
     "test": "npm run build:backend && npm run typecheck:frontend && node --test"
   },
   "engines": {
