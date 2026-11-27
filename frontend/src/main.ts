@@ -793,6 +793,63 @@ $("#menu-form").addEventListener("submit", async (event: SubmitEvent) => {
     submit.disabled = false;
   }
 });
+$("#recipe-form").addEventListener("submit", async (event: SubmitEvent) => {
+  event.preventDefault();
+
+  const form = event.currentTarget as HTMLFormElement;
+  const submit = $('button[type="submit"]', form);
+  const rows = $$(".recipe-ingredient-row", $("#recipe-ingredients"));
+
+  const ingredients = rows.map((row) => ({
+    inventoryId: Number($('select[name="inventoryId"]', row).value),
+    quantityRequired: Number($('input[name="quantityRequired"]', row).value),
+  }));
+
+  // Validate ingredients
+  if (ingredients.some((item) =>
+    !Number.isInteger(item.inventoryId) ||
+    item.inventoryId <= 0 ||
+    !Number.isFinite(item.quantityRequired) ||
+    item.quantityRequired <= 0
+  )) {
+    $("#recipe-error").textContent =
+      "Please select an ingredient and enter a quantity greater than zero.";
+    return;
+  }
+
+  // Prevent duplicate ingredients
+  if (new Set(ingredients.map((item) => item.inventoryId)).size !== ingredients.length) {
+    $("#recipe-error").textContent =
+      "Each inventory item can only appear once in a recipe.";
+    return;
+  }
+
+  submit.disabled = true;
+  $("#recipe-error").textContent = "";
+
+  try {
+    const menuId = form.dataset.menuId;
+
+    if (!menuId) {
+      throw new Error("No menu item selected.");
+    }
+
+    await api(`/api/menu/${menuId}/recipe`, {
+      method: "PUT",
+      body: JSON.stringify({ ingredients }),
+    });
+
+    $("#recipe-dialog").close();
+
+    toast("Recipe saved successfully.");
+
+    await loadInventory();
+  } catch (error) {
+    showError($("#recipe-error"), error);
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 $("#restock-form").addEventListener("submit", async (event: SubmitEvent) => {
   event.preventDefault();
