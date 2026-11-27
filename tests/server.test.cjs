@@ -335,6 +335,134 @@ test("supports menu creation, inventory restocking, and method errors", async ()
   assert.equal(wrongMethod.response.status, 405);
 });
 
+
+test("manages recipes, deducts ingredient stock, restores cancelled orders, and prevents insufficient-stock orders", async () => {
+  const menuItemId = 41;
+  const inventoryId = 51;
+
+  // Read the starting inventory quantity.
+  const initialInventory = await request("/api/inventory");
+  const initialQuantity = initialInventory.body.find(
+    (item) => item.id === inventoryId,
+  ).quantity;
+
+  // Save a recipe requiring 2 avocados per menu item.
+  const savedRecipe = await request(`/api/menu/${menuItemId}/recipe`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ingredients: [
+        {
+          inventoryId,
+          quantityRequired: 2,
+        },
+      ],
+    }),
+  });
+
+  assert.equal(savedRecipe.response.status, 200);
+  assert.equal(savedRecipe.body.ingredients.length, 1);
+  assert.equal(savedRecipe.body.ingredients[0].quantityRequired, 2);
+
+  // Confirm that the recipe can be retrieved.
+  const retrievedRecipe = await request(`/api/menu/${menuItemId}/recipe`);
+
+  assert.equal(retrievedRecipe.response.status, 200);
+  assert.equal(retrievedRecipe.body.ingredients.length, 1);
+
+  // Create an order containing two menu items.
+  const createdOrder = await request("/api/orders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      customerName: "Recipe Test Customer",
+      items: [
+        {
+          menuItemId,
+          quantity: 2,
+        },
+      ],
+    }),
+  });
+
+  assert.equal(createdOrder.response.status, 201);
+
+  // Two menu items require four avocados.
+  const afterOrder = await request("/api/inventory");
+
+  const quantityAfterOrder = afterOrder.body.find(
+    (item) => item.id === inventoryId,
+  ).quantity;
+
+  assert.equal(quantityAfterOrder, initialQuantity - 4);
+
+  // Cancel the order.
+  const cancelledOrder = await request(
+    `/api/orders/${createdOrder.body.id}/status`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "Cancelled" }),
+    },
+  );
+
+  assert.equal(cancelledOrder.response.status, 200);
+  assert.equal(cancelledOrder.body.status, "Cancelled");
+
+  // Confirm that all four avocados were restored.
+  const afterCancellation = await request("/api/inventory");
+
+  const restoredQuantity = afterCancellation.body.find(
+    (item) => item.id === inventoryId,
+  ).quantity;
+
+  assert.equal(restoredQuantity, initialQuantity);
+
+  // Change the recipe to require more stock than is available.
+  const oversizedRecipe = await request(`/api/menu/${menuItemId}/recipe`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ingredients: [
+        {
+          inventoryId,
+          quantityRequired: 100,
+        },
+      ],
+    }),
+  });
+
+  assert.equal(oversizedRecipe.response.status, 200);
+
+  // The order must fail because there are not enough avocados.
+  const insufficientOrder = await request("/api/orders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      customerName: "Insufficient Stock Customer",
+      items: [
+        {
+          menuItemId,
+          quantity: 1,
+        },
+      ],
+    }),
+  });
+
+  assert.equal(insufficientOrder.response.status, 400);
+  assert.match(insufficientOrder.body.error, /Insufficient stock/);
+
+  // Failed orders must not change inventory.
+  const finalInventory = await request("/api/inventory");
+
+  const finalQuantity = finalInventory.body.find(
+    (item) => item.id === inventoryId,
+  ).quantity;
+
+  assert.equal(finalQuantity, initialQuantity);
+});
+
+
 test("dashboard revenue and popular items include only ready or completed orders in the last week", async () => {
   const dashboard = await request("/api/dashboard");
   assert.equal(dashboard.body.weeklySales.length, 7);
