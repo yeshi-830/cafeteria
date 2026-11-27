@@ -629,7 +629,7 @@ document.addEventListener("click", async (event) => {
 
     return;
   }
-  
+
   const toggleMenuButton = target.closest("[data-menu-toggle]");
   if (toggleMenuButton) {
     toggleMenuButton.disabled = true;
@@ -645,6 +645,35 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
+    // Add a new recipe ingredient
+  if (target.closest("#add-recipe-ingredient")) {
+    const rows = $$(".recipe-ingredient-row", $("#recipe-ingredients"));
+
+    const ingredients = rows.map((row) => ({
+      inventoryId: Number($('select[name="inventoryId"]', row).value),
+      quantityRequired: Number($('input[name="quantityRequired"]', row).value) || 1,
+    }));
+
+    ingredients.push({ inventoryId: 0, quantityRequired: 1 });
+    renderRecipeIngredients(ingredients);
+    return;
+  }
+
+  // Remove a recipe ingredient
+  const removeRecipeButton = target.closest("[data-recipe-remove]");
+  if (removeRecipeButton) {
+    const rows = $$(".recipe-ingredient-row", $("#recipe-ingredients"));
+
+    if (rows.length > 1) {
+      removeRecipeButton.closest(".recipe-ingredient-row").remove();
+    } else {
+      $('select[name="inventoryId"]', rows[0]).value = "";
+      $('input[name="quantityRequired"]', rows[0]).value = "1";
+    }
+
+    return;
+  }
+  
   const closeButton = target.closest("[data-close-dialog]");
   if (closeButton) {
     $(`#${closeButton.dataset.closeDialog}`).close();
