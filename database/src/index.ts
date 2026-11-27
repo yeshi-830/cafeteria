@@ -34,7 +34,51 @@ db.exec(`
     id INTEGER PRIMARY KEY, message TEXT NOT NULL, kind TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+    CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id INTEGER PRIMARY KEY,
+    menu_item_id INTEGER NOT NULL
+      REFERENCES menu_items(id) ON DELETE CASCADE,
+    inventory_id INTEGER NOT NULL
+      REFERENCES inventory(id) ON DELETE RESTRICT,
+    quantity_required REAL NOT NULL CHECK (quantity_required > 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(menu_item_id, inventory_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory_movements (
+    id INTEGER PRIMARY KEY,
+    inventory_id INTEGER NOT NULL
+      REFERENCES inventory(id) ON DELETE RESTRICT,
+    order_id INTEGER
+      REFERENCES orders(id) ON DELETE RESTRICT,
+    movement_type TEXT NOT NULL CHECK (
+      movement_type IN (
+        'order_deduction',
+        'order_restoration',
+        'restock',
+        'adjustment'
+      )
+    ),
+    quantity_change REAL NOT NULL CHECK (quantity_change != 0),
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_menu_item
+    ON recipe_ingredients(menu_item_id);
+
+  CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_inventory
+    ON recipe_ingredients(inventory_id);
+
+  CREATE INDEX IF NOT EXISTS idx_inventory_movements_inventory
+    ON inventory_movements(inventory_id, created_at DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_inventory_movements_order
+    ON inventory_movements(order_id);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_movements_order_type
+    ON inventory_movements(order_id, inventory_id, movement_type)
+    WHERE order_id IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_orders_status_created_at ON orders(status, created_at);
   CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 `);
