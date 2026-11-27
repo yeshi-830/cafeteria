@@ -617,6 +617,19 @@ document.addEventListener("click", async (event) => {
     $("#menu-dialog").showModal();
     return;
   }
+    const recipeButton = target.closest("[data-recipe-edit]");
+  if (recipeButton) {
+    recipeButton.disabled = true;
+
+    try {
+      await openRecipeDialog(Number(recipeButton.dataset.recipeEdit));
+    } finally {
+      recipeButton.disabled = false;
+    }
+
+    return;
+  }
+  
   const toggleMenuButton = target.closest("[data-menu-toggle]");
   if (toggleMenuButton) {
     toggleMenuButton.disabled = true;
