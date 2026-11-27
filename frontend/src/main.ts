@@ -313,7 +313,11 @@ async function loadMenu() {
       <div class="menu-card-top"><span class="menu-category">${escapeHtml(item.category)}</span><span class="availability${item.available ? "" : " unavailable"}">${item.available ? "Available" : "Unavailable"}</span></div>
       <h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description || "A little something delicious from our kitchen.")}</p>
       <div class="menu-card-footer"><strong>${money(item.price_cents)}</strong><span><svg class="mini-clock"><use href="#icon-clock"/></svg> ${Number(item.prep_minutes)} min prep</span></div>
-      <div class="menu-card-actions"><button class="row-action" type="button" data-menu-edit="${item.id}">Edit</button><button class="row-action" type="button" data-menu-toggle="${item.id}" data-available="${item.available ? "true" : "false"}">${item.available ? "Mark unavailable" : "Mark available"}</button></div>
+  <div class="menu-card-actions">
+  <button class="row-action" type="button" data-menu-edit="${item.id}">Edit</button>
+  ${state.user?.role !== "staff" ? `<button class="row-action" type="button" data-recipe-edit="${item.id}">Manage recipe</button>` : ""}
+  <button class="row-action" type="button" data-menu-toggle="${item.id}" data-available="${item.available ? "true" : "false"}">${item.available ? "Mark unavailable" : "Mark available"}</button>
+</div>
     </article>`).join("");
     updateFeatureHighlights();
   } catch (error) {
