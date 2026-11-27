@@ -264,6 +264,7 @@
       </form>
     </dialog>
 
+
     <dialog class="app-dialog" id="menu-dialog">
       <form id="menu-form">
         <div class="dialog-heading"><div><p class="eyebrow">FRESH FROM THE KITCHEN</p><h2>Add a menu item</h2><p>Make something delicious part of the lineup.</p></div><button class="dialog-close" type="button" data-close-dialog="menu-dialog" aria-label="Close dialog">×</button></div>
@@ -276,6 +277,40 @@
         <label class="form-field"><span>Description <em>optional</em></span><textarea name="description" rows="3" maxlength="250" placeholder="A short, appetizing description…"></textarea></label>
         <div class="form-error" id="menu-error" role="alert"></div>
         <div class="dialog-actions"><button class="button button-quiet" type="button" data-close-dialog="menu-dialog">Cancel</button><button class="button button-primary" type="submit">Add to menu <svg><use href="#icon-plus"/></svg></button></div>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog app-dialog-compact" id="restock-dialog">    </dialog>
+
+    <!-- Recipe management dialog -->
+    <dialog class="app-dialog" id="recipe-dialog">
+      <form id="recipe-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">KITCHEN MANAGEMENT</p>
+            <h2>Manage recipe</h2>
+            <p id="recipe-menu-name">Configure ingredients for this menu item.</p>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog="recipe-dialog" aria-label="Close dialog">×</button>
+        </div>
+
+        <div class="form-section-label">
+          <span>Recipe ingredients</span>
+          <button class="text-button" type="button" id="add-recipe-ingredient">+ Add ingredient</button>
+        </div>
+
+        <p class="recipe-help">
+          Set how much inventory is needed to prepare one menu item.
+        </p>
+
+        <div id="recipe-ingredients"></div>
+
+        <div class="form-error" id="recipe-error" role="alert"></div>
+
+        <div class="dialog-actions">
+          <button class="button button-quiet" type="button" data-close-dialog="recipe-dialog">Cancel</button>
+          <button class="button button-primary" type="submit">Save recipe</button>
+        </div>
       </form>
     </dialog>
 
