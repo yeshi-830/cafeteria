@@ -6,6 +6,21 @@ interface InventoryItem {
   id: number; name: string; category: string; quantity: number;
   unit: string; reorder_level: number; updated_at: string;
 }
+interface RecipeIngredient {
+  inventoryId: number;
+  inventoryName: string;
+  category: string;
+  quantityRequired: number;
+  unit: string;
+  currentQuantity: number;
+  reorderLevel: number;
+}
+
+interface RecipeResponse {
+  menuItem: MenuItem;
+  ingredients: RecipeIngredient[];
+}
+
 interface Order {
   id: number; order_number: string; customer_name: string; table_number: string;
   status: string; total_cents: number; created_at: string; item_count: number; items: string | null;
