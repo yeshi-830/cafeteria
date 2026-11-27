@@ -39,7 +39,12 @@ const state = {
 
 const $ = (selector: string, root: any = document): any => root.querySelector(selector);
 const $$ = (selector: string, root: any = document): any[] => [...root.querySelectorAll(selector)];
-const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+const money = (cents: number) =>
+  new Intl.NumberFormat("en-ET", {
+    style: "currency",
+    currency: "ETB",
+    currencyDisplay: "code",
+  }).format(cents / 100);
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character] ?? character);
