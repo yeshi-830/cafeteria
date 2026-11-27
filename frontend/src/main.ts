@@ -437,6 +437,76 @@ function openRestockDialog(itemId: string | number = "") {
   $("#restock-reorder-level").value = selectedItem?.reorder_level ?? "";
   $("#restock-dialog").showModal();
 }
+function renderRecipeIngredients(
+  ingredients: Array<{ inventoryId: number; quantityRequired: number }> = []
+) {
+  const container = $("#recipe-ingredients");
+
+  if (state.inventory.length === 0) {
+    container.innerHTML = `
+      <p class="recipe-help">
+        No inventory items found. Add inventory items before creating recipes.
+      </p>
+    `;
+    return;
+  }
+
+  const rows = ingredients.length ? ingredients : [{ inventoryId: 0, quantityRequired: 1 }];
+
+  container.innerHTML = rows.map((ingredient) => `
+    <div class="recipe-ingredient-row">
+      <label class="form-field">
+        <span>Ingredient</span>
+        <select name="inventoryId" required>
+          <option value="">Choose inventory item</option>
+          ${state.inventory.map((item) => `
+            <option value="${item.id}" ${item.id === ingredient.inventoryId ? "selected" : ""}>
+              ${escapeHtml(item.name)} (${escapeHtml(item.unit)})
+            </option>
+          `).join("")}
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Quantity per dish</span>
+        <input name="quantityRequired" type="number" min="0.001" step="any"
+          value="${ingredient.quantityRequired}" required>
+      </label>
+
+      <button class="row-action" type="button" data-recipe-remove>
+        Remove
+      </button>
+    </div>
+  `).join("");
+}
+
+async function openRecipeDialog(menuId: number) {
+  try {
+    const [recipe, inventory] = await Promise.all([
+      api<RecipeResponse>(`/api/menu/${menuId}/recipe`),
+      api<InventoryItem[]>("/api/inventory"),
+    ]);
+
+    state.inventory = inventory;
+
+    const form = $("#recipe-form");
+    form.dataset.menuId = String(menuId);
+
+    $("#recipe-menu-name").textContent = `Ingredients for ${recipe.menuItem.name}`;
+    $("#recipe-error").textContent = "";
+
+    renderRecipeIngredients(
+      recipe.ingredients.map((ingredient) => ({
+        inventoryId: ingredient.inventoryId,
+        quantityRequired: ingredient.quantityRequired,
+      }))
+    );
+
+    $("#recipe-dialog").showModal();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
 
 function showError(element: HTMLElement, error: Error) {
   element.textContent = error.message;
