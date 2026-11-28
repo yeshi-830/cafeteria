@@ -848,7 +848,7 @@ $("#recipe-form").addEventListener("submit", async (event: SubmitEvent) => {
     showError($("#recipe-error"), error);
   } finally {
     submit.disabled = false;
-  
+  }
 });
 
 $("#restock-form").addEventListener("submit", async (event: SubmitEvent) => {
